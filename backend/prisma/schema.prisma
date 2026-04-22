@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // TODO: Su dung SQL Server theo de tai, URL doc tu bien moi truong DATABASE_URL.
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model User {
+  id           String       @id @default(cuid())
+  username     String       @unique
+  email        String       @unique
+  passwordHash String
+  role         UserRole     @default(USER)
+  messages     Message[]
+  memberships  RoomMember[]
+  auditLogs    AuditLog[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Room {
+  id         String       @id @default(cuid())
+  name       String
+  isPrivate  Boolean      @default(false)
+  members    RoomMember[]
+  messages   Message[]
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+}
+
+model RoomMember {
+  id        String   @id @default(cuid())
+  roomId    String
+  userId    String
+  isOwner   Boolean  @default(false)
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([roomId, userId])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  content    String   @db.NVarChar(Max)
+  roomId     String
+  senderId   String
+  room       Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}
+
+model AuditLog {
+  // TODO: Day la bang truy vet hanh dong nhay cam (xoa tin nhan, doi quyen, doi mat khau...).
+  id          String   @id @default(cuid())
+  actorId     String?
+  action      String
+  targetType  String?
+  targetId    String?
+  description String?  @db.NVarChar(Max)
+  metadata    String?  @db.NVarChar(Max)
+  actor       User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+}
