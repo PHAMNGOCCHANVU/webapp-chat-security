@@ -3,11 +3,92 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chat Room - Secure Internal Chat</title>
+    <title>Chat - ZALEGRAM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style type="text/tailwindcss">
+      .scroll-hide::-webkit-scrollbar { display: none; }
+      .scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
   </head>
-  <body>
-    <!-- TODO: Hien thi danh sach phong, cua so chat realtime va quan ly thanh vien. -->
-    <h1>Chat Room</h1>
-    <p>Realtime chat entry page.</p>
+  <body class="bg-slate-100 h-screen flex flex-col font-sans overflow-hidden">
+    
+    <!-- Navbar -->
+    <nav class="bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center shrink-0 shadow-sm z-10">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg shadow-sm flex items-center justify-center">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+        </div>
+        <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">Zalegram Chat</h1>
+      </div>
+      <div class="flex items-center gap-4">
+        <span id="user-name" class="font-medium text-slate-700 hidden md:block"></span>
+        <button id="admin-btn" class="hidden text-sm px-3 py-1.5 bg-emerald-100 text-emerald-700 font-medium rounded-lg hover:bg-emerald-200 transition-colors" onclick="window.location.href='audit-log.html'">
+          Admin Panel
+        </button>
+        <button onclick="logout()" class="text-sm px-4 py-1.5 border border-slate-300 text-slate-600 font-medium rounded-lg hover:bg-slate-50 transition-colors">
+          Logout
+        </button>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="flex flex-1 overflow-hidden">
+      
+      <!-- Sidebar: Room List -->
+      <aside class="w-80 bg-white border-r border-slate-200 flex flex-col shrink-0">
+        <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+          <h2 class="font-bold text-slate-800">Your Rooms</h2>
+          <button id="create-room-btn" class="p-1.5 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors" title="Create Room">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          </button>
+        </div>
+        <div id="room-list" class="flex-1 overflow-y-auto scroll-hide p-2">
+          <!-- Rooms injected here -->
+        </div>
+      </aside>
+
+      <!-- Chat Area -->
+      <main class="flex-1 flex flex-col bg-slate-50 relative">
+        <!-- Room Header -->
+        <header id="chat-header" class="px-6 py-4 bg-white border-b border-slate-200 shadow-sm flex justify-between items-center shrink-0 hidden">
+          <div>
+            <h2 id="room-name" class="text-lg font-bold text-slate-800"></h2>
+            <p id="room-members" class="text-sm text-slate-500"></p>
+          </div>
+          <button id="room-settings-btn" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
+          </button>
+        </header>
+
+        <!-- Messages -->
+        <div id="messages-container" class="flex-1 overflow-y-auto p-6 space-y-4">
+          <!-- Welcome Placeholder -->
+          <div id="welcome-screen" class="h-full flex flex-col items-center justify-center text-slate-400">
+            <svg class="w-16 h-16 mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+            <p class="text-lg font-medium">Select a room to start chatting</p>
+          </div>
+        </div>
+
+        <!-- Message Input -->
+        <div id="message-input-area" class="p-4 bg-white border-t border-slate-200 shrink-0 hidden">
+          <form id="message-form" class="flex items-end gap-2 max-w-4xl mx-auto">
+            <div class="flex-1 bg-slate-100 rounded-2xl border border-slate-200 px-4 py-2 flex items-center focus-within:ring-2 focus-within:ring-blue-500 focus-within:bg-white transition-all">
+              <input type="text" id="message-input" autocomplete="off" class="w-full bg-transparent outline-none text-slate-800" placeholder="Type a message...">
+            </div>
+            <button type="submit" class="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-sm shrink-0">
+              <svg class="w-5 h-5 transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+            </button>
+          </form>
+        </div>
+      </main>
+
+    </div>
+
+    <!-- Modals... -->
+    
+    <script src="../js/auth.js"></script>
+    <script src="../js/chat.js"></script>
   </body>
 </html>

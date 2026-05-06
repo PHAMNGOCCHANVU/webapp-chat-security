@@ -1,27 +1,21 @@
 import http from "http";
 import { Server } from "socket.io";
 import app from "./app";
+import { env } from "./config/env";
+import { setupSocketHandlers } from "./sockets/chat.handler";
 
-const PORT = Number(process.env.PORT ?? 4000);
+const PORT = Number(env.PORT);
 
 const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: ["http://127.0.0.1:5500", "http://127.0.0.1:5501", "http://localhost:5500", "http://localhost:5501"],
+    credentials: true,
   },
 });
 
-// TODO: Tach socket event handler sang src/sockets de de test va mo rong.
-io.on("connection", (socket) => {
-  socket.on("join-room", (roomId: string) => {
-    socket.join(roomId);
-  });
-
-  socket.on("send-message", (payload: { roomId: string; content: string; sender: string }) => {
-    io.to(payload.roomId).emit("new-message", payload);
-  });
-});
+setupSocketHandlers(io);
 
 httpServer.listen(PORT, () => {
   // eslint-disable-next-line no-console
