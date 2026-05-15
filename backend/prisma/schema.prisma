@@ -7,93 +7,219 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Người dùng ───
-// role: "USER" | "ADMIN"
-// status: "ACTIVE" | "LOCKED"
+// ========================================
+// USERS - Bảng người dùng
+// ========================================
 model User {
-  id           String @id @default(cuid())
+  id           String @id @default(uuid())
   username     String @unique
-  displayName  String
   email        String @unique
-  passwordHash String
-  role         String @default("USER")
+  passwordHash String @map("password_hash")
+  displayName  String @map("display_name")
+  avatarUrl    String? @map("avatar_url")
   status       String @default("ACTIVE")
+  // status: ACTIVE | LOCKED | BANNED
 
-  messages    Message[]
-  memberships RoomMember[]
-  auditLogs   AuditLog[]
-  sessions    Session[]
+  userRoles          UserRole[]
+  createdMessages    Message[]
+  auditLogs          AuditLog[]
+  sessions           Session[]
+  friendRequestsSent     FriendRequest[] @relation("sender")
+  friendRequestsReceived FriendRequest[] @relation("receiver")
+  friendships1       Friendship[] @relation("user1")
+  friendships2       Friendship[] @relation("user2")
+  conversationMembers ConversationMember[] @relation("conversationMembers")
+  createdConversations Conversation[] @relation("createdBy")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
 }
 
-// ─── Session lưu trong DB (session-based auth) ───
-model Session {
-  id        String   @id @default(cuid())
-  sid       String   @unique
-  data      String   @db.NVarChar(Max)
-  expiresAt DateTime
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+// ========================================
+// ROLES - Bảng vai trò
+// ========================================
+model Role {
+  id          String @id @default(uuid())
+  roleName    String @unique @map("role_name")
+  description String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
 }
 
-// ─── Phòng chat ───
-model Room {
-  id        String  @id @default(cuid())
-  name      String
-  isPrivate Boolean @default(false)
-  isDirect  Boolean @default(false)
+// ========================================
+// PERMISSIONS - Bảng quyền
+// ========================================
+model Permission {
+  id          String @id @default(uuid())
+  permissionName String @unique @map("permission_name")
+  description String?
 
-  members  RoomMember[]
-  messages Message[]
+  rolePermissions RolePermission[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@map("permissions")
 }
 
-// ─── Thành viên phòng chat ───
-model RoomMember {
-  id      String  @id @default(cuid())
-  roomId  String
-  userId  String
-  isOwner Boolean @default(false)
+// ========================================
+// USER ROLES - Bảng gán vai trò cho người dùng
+// ========================================
+model UserRole {
+  userId    String
+  roleId    String
+  assignedAt DateTime @default(now()) @map("assigned_at")
 
-  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-
-  @@unique([roomId, userId])
+  @@id([userId, roleId])
+  @@map("user_roles")
 }
 
-// ─── Tin nhắn ───
+// ========================================
+// ROLE PERMISSIONS - Bảng gán quyền cho vai trò
+// ========================================
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ========================================
+// FRIEND REQUESTS - Bảng yêu cầu kết bạn
+// ========================================
+model FriendRequest {
+  id         String @id @default(uuid())
+  senderId   String @map("sender_id")
+  receiverId String @map("receiver_id")
+  status     String @default("PENDING")
+  // status: PENDING | ACCEPTED | REJECTED
+
+  sender     User @relation("sender", fields: [senderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  receiver   User @relation("receiver", fields: [receiverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  respondedAt DateTime? @map("responded_at")
+
+  @@map("friend_requests")
+}
+
+// ========================================
+// FRIENDSHIPS - Bảng liên hệ bạn bè
+// ========================================
+model Friendship {
+  id       String @id @default(uuid())
+  user1Id  String @map("user1_id")
+  user2Id  String @map("user2_id")
+
+  user1    User @relation("user1", fields: [user1Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user2    User @relation("user2", fields: [user2Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("friendships")
+}
+
+// ========================================
+// CONVERSATIONS - Bảng cuộc hội thoại (Rooms)
+// ========================================
+model Conversation {
+  id               String @id @default(uuid())
+  conversationType String @map("conversation_type")
+  // conversationType: PRIVATE | GROUP
+  conversationName String? @map("conversation_name")
+  createdBy        String @map("created_by")
+
+  creator              User @relation("createdBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  members              ConversationMember[]
+  messages             Message[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("conversations")
+}
+
+// ========================================
+// CONVERSATION MEMBERS - Bảng thành viên cuộc hội thoại
+// ========================================
+model ConversationMember {
+  conversationId String @map("conversation_id")
+  userId         String @map("user_id")
+  memberRole     String @default("MEMBER") @map("member_role")
+  // memberRole: OWNER | MEMBER
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user         User @relation("conversationMembers", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  @@id([conversationId, userId])
+  @@map("conversation_members")
+}
+
+// ========================================
+// MESSAGES - Bảng tin nhắn
+// ========================================
 model Message {
-  id       String @id @default(cuid())
-  content  String @db.NVarChar(Max)
-  roomId   String
-  senderId String
+  id              String @id @default(uuid())
+  conversationId  String @map("conversation_id")
+  senderId        String @map("sender_id")
+  messageContent  String @map("message_content") @db.NVarChar(Max)
+  isDeleted       Boolean @default(false) @map("is_deleted")
 
-  room   Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: NoAction)
+  sender       User @relation(fields: [senderId], references: [id], onDelete: NoAction)
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+
+  @@map("messages")
 }
 
-// ─── Nhật ký thao tác nhạy cảm ───
+// ========================================
+// AUDIT LOGS - Bảng nhật ký kiểm toán
+// ========================================
 model AuditLog {
-  id          String   @id @default(cuid())
-  actorId     String?
-  action      String   // VD: "LOGIN", "REGISTER", "DELETE_MESSAGE", "CHANGE_ROLE"...
-  targetType  String?  // VD: "User", "Room", "Message"
-  targetId    String?
-  description String?  @db.NVarChar(Max)
-  metadata    String?  @db.NVarChar(Max) // JSON bổ sung
-  ipAddress   String?
-  actor       User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  id           String @id @default(uuid())
+  actorUserId  String? @map("actor_user_id")
+  actionType   String @map("action_type")
+  targetTable  String? @map("target_table")
+  targetId     String? @map("target_id")
+  actionStatus String @map("action_status")
+  // actionStatus: SUCCESS | FAILED
+  ipAddress    String? @map("ip_address")
+  description  String? @map("description") @db.NVarChar(Max)
 
-  createdAt DateTime @default(now())
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
+
+// ========================================
+// SESSION - Bảng lưu trữ phiên (express-session)
+// ========================================
+model Session {
+  id        String @id @default(uuid())
+  sid       String @unique
+  data      String @db.NVarChar(Max)
+  expiresAt DateTime @map("expires_at")
+  userId    String?
+  
+  user      User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sessions")
 }

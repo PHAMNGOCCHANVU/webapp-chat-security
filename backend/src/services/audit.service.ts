@@ -8,17 +8,18 @@ export async function logAudit(params: {
   description?: string;
   metadata?: any;
   ipAddress?: string;
+  status?: "SUCCESS" | "FAILED";
 }) {
   try {
     await prisma.auditLog.create({
       data: {
-        actorId: params.actorId,
-        action: params.action,
-        targetType: params.targetType,
+        actorUserId: params.actorId,
+        actionType: params.action,
+        targetTable: params.targetType,
         targetId: params.targetId,
         description: params.description,
-        metadata: params.metadata ? JSON.stringify(params.metadata) : null,
         ipAddress: params.ipAddress,
+        actionStatus: params.status || "SUCCESS",
       },
     });
   } catch (error) {

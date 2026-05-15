@@ -20,10 +20,10 @@ export class RoomController {
 
       await logAudit({
         actorId: req.session.userId!,
-        action: "CREATE_ROOM",
-        targetType: "Room",
+        action: "CREATE_CONVERSATION",
+        targetType: "Conversation",
         targetId: room.id,
-        description: `Created room: ${room.name}`,
+        description: `Created conversation: ${room.conversationName || room.id}`,
         ipAddress: req.ip,
       });
 
@@ -47,7 +47,10 @@ export class RoomController {
 
   static async getMessages(req: Request, res: Response) {
     try {
-      const messages = await RoomService.getMessages(req.params.id, req.session.userId!);
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      const messages = await RoomService.getMessages(req.params.id, req.session.userId!, limit, offset);
       res.json(messages);
     } catch (err: any) {
       if (err.message.startsWith("Forbidden")) return res.status(403).json({ error: err.message });
@@ -63,9 +66,9 @@ export class RoomController {
       await logAudit({
         actorId: req.session.userId!,
         action: "ADD_MEMBER",
-        targetType: "RoomMember",
-        targetId: member.id,
-        metadata: { roomId: req.params.id, addedUserId: data.userId },
+        targetType: "ConversationMember",
+        targetId: req.params.id,
+        description: `Added member ${data.userId} to conversation`,
         ipAddress: req.ip,
       });
 
@@ -84,9 +87,9 @@ export class RoomController {
       await logAudit({
         actorId: req.session.userId!,
         action: "REMOVE_MEMBER",
-        targetType: "Room",
+        targetType: "Conversation",
         targetId: req.params.id,
-        metadata: { removedUserId: req.params.userId },
+        description: `Removed member ${req.params.userId} from conversation`,
         ipAddress: req.ip,
       });
 

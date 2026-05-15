@@ -1,26 +1,36 @@
 import { Request, Response, NextFunction } from "express";
-import { prisma } from "../config/prisma";
+import { AuthService } from "../services/auth.service";
 
-export function requireRole(role: string) {
+/**
+ * Middleware to require specific role
+ * Usage: router.get("/admin", requireRole("ADMIN"), handler)
+ */
+export function requireRole(roleName: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (!req.session?.userId) {
-        return res.status(401).json({ error: "Unauthorized" });
+      const session = req.session as any;
+
+      if (!session?.userId) {
+        return res.status(401).json({
+          error: "Unauthorized",
+          message: "Please log in first",
+        });
       }
 
-      const user = await prisma.user.findUnique({
-        where: { id: req.session.userId },
-        select: { role: true },
-      });
+      const hasRole = await AuthService.hasRole(session.userId, roleName);
 
-      if (!user || user.role !== role) {
-        return res.status(403).json({ error: "Forbidden: Insufficient permissions" });
+      if (!hasRole) {
+        return res.status(403).json({
+          error: "Forbidden",
+          message: `This action requires ${roleName} role`,
+        });
       }
 
       next();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Role middleware error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   };
 }
+
