@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { AuthService } from "../services/auth.service";
 import { RegisterSchema, LoginSchema, UpdateProfileSchema, ChangePasswordSchema } from "../services/validators";
-import { prisma } from "../config/prisma";
+import { logAudit, AuditAction } from "../services/audit.service";
 import { z } from "zod";
 
 /**
@@ -17,17 +17,14 @@ export class AuthController {
       const data = RegisterSchema.parse(req.body);
       const user = await AuthService.register(data);
 
-      // Log audit
-      await prisma.auditLog.create({
-        data: {
-          actorUserId: user.id,
-          actionType: "REGISTER",
-          targetTable: "users",
-          targetId: user.id,
-          actionStatus: "SUCCESS",
-          ipAddress: req.ip,
-          description: `User registered: ${user.username}`,
-        },
+      await logAudit({
+        actorId: user.id,
+        action: AuditAction.REGISTER,
+        targetType: "users",
+        targetId: user.id,
+        description: `User registered: ${user.username}`,
+        ipAddress: req.ip,
+        status: "SUCCESS",
       });
 
       res.status(201).json({
@@ -42,15 +39,12 @@ export class AuthController {
         });
       }
 
-      // Log failed attempt
-      await prisma.auditLog.create({
-        data: {
-          actionType: "REGISTER",
-          targetTable: "users",
-          actionStatus: "FAILED",
-          ipAddress: req.ip,
-          description: `Registration failed: ${error.message}`,
-        },
+      await logAudit({
+        action: AuditAction.REGISTER_FAILED,
+        targetType: "users",
+        description: `Registration failed: ${error.message}`,
+        ipAddress: req.ip,
+        status: "FAILED",
       });
 
       res.status(400).json({ error: error.message });
@@ -70,17 +64,14 @@ export class AuthController {
       (req.session as any).userId = user.id;
       (req.session as any).username = user.username;
 
-      // Log audit
-      await prisma.auditLog.create({
-        data: {
-          actorUserId: user.id,
-          actionType: "LOGIN",
-          targetTable: "users",
-          targetId: user.id,
-          actionStatus: "SUCCESS",
-          ipAddress: req.ip,
-          description: `User logged in: ${user.username}`,
-        },
+      await logAudit({
+        actorId: user.id,
+        action: AuditAction.LOGIN,
+        targetType: "users",
+        targetId: user.id,
+        description: `User logged in: ${user.username}`,
+        ipAddress: req.ip,
+        status: "SUCCESS",
       });
 
       res.status(200).json({
@@ -95,15 +86,12 @@ export class AuthController {
         });
       }
 
-      // Log failed login attempt
-      await prisma.auditLog.create({
-        data: {
-          actionType: "LOGIN",
-          targetTable: "users",
-          actionStatus: "FAILED",
-          ipAddress: req.ip,
-          description: `Login failed: ${error.message}`,
-        },
+      await logAudit({
+        action: AuditAction.LOGIN_FAILED,
+        targetType: "users",
+        description: `Login failed for input "${req.body?.username ?? "unknown"}": ${error.message}`,
+        ipAddress: req.ip,
+        status: "FAILED",
       });
 
       res.status(401).json({ error: error.message });
@@ -116,24 +104,21 @@ export class AuthController {
    */
   static async logout(req: Request, res: Response) {
     const userId = (req.session as any).userId;
+    const username = (req.session as any).username;
 
     try {
-      // Log audit before destroying session
       if (userId) {
-        await prisma.auditLog.create({
-          data: {
-            actorUserId: userId,
-            actionType: "LOGOUT",
-            targetTable: "users",
-            targetId: userId,
-            actionStatus: "SUCCESS",
-            ipAddress: req.ip,
-            description: "User logged out",
-          },
+        await logAudit({
+          actorId: userId,
+          action: AuditAction.LOGOUT,
+          targetType: "users",
+          targetId: userId,
+          description: `User logged out: ${username ?? userId}`,
+          ipAddress: req.ip,
+          status: "SUCCESS",
         });
       }
 
-      // Destroy session
       req.session.destroy((err) => {
         if (err) {
           return res.status(500).json({ error: "Could not logout" });
@@ -160,7 +145,6 @@ export class AuthController {
       }
 
       const profile = await AuthService.getUserProfile(userId);
-
       res.status(200).json(profile);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -182,17 +166,17 @@ export class AuthController {
       const data = UpdateProfileSchema.parse(req.body);
       const user = await AuthService.updateProfile(userId, data);
 
-      // Log audit
-      await prisma.auditLog.create({
-        data: {
-          actorUserId: userId,
-          actionType: "UPDATE_PROFILE",
-          targetTable: "users",
-          targetId: userId,
-          actionStatus: "SUCCESS",
-          ipAddress: req.ip,
-          description: "User updated profile",
+      await logAudit({
+        actorId: userId,
+        action: AuditAction.UPDATE_PROFILE,
+        targetType: "users",
+        targetId: userId,
+        description: "User updated profile",
+        metadata: {
+          updatedFields: Object.keys(data),
         },
+        ipAddress: req.ip,
+        status: "SUCCESS",
       });
 
       res.status(200).json({
@@ -223,9 +207,9 @@ export class AuthController {
    * Change user password
    */
   static async changePassword(req: Request, res: Response) {
-    try {
-      const userId = (req.session as any).userId;
+    const userId = (req.session as any).userId;
 
+    try {
       if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -233,17 +217,14 @@ export class AuthController {
       const data = ChangePasswordSchema.parse(req.body);
       await AuthService.changePassword(userId, data);
 
-      // Log audit
-      await prisma.auditLog.create({
-        data: {
-          actorUserId: userId,
-          actionType: "CHANGE_PASSWORD",
-          targetTable: "users",
-          targetId: userId,
-          actionStatus: "SUCCESS",
-          ipAddress: req.ip,
-          description: "User changed password",
-        },
+      await logAudit({
+        actorId: userId,
+        action: AuditAction.CHANGE_PASSWORD,
+        targetType: "users",
+        targetId: userId,
+        description: "User changed password successfully",
+        ipAddress: req.ip,
+        status: "SUCCESS",
       });
 
       res.status(200).json({ message: "Password changed successfully" });
@@ -255,17 +236,14 @@ export class AuthController {
         });
       }
 
-      // Log failed attempt
-      await prisma.auditLog.create({
-        data: {
-          actorUserId: (req.session as any).userId,
-          actionType: "CHANGE_PASSWORD",
-          targetTable: "users",
-          targetId: (req.session as any).userId,
-          actionStatus: "FAILED",
-          ipAddress: req.ip,
-          description: `Change password failed: ${error.message}`,
-        },
+      await logAudit({
+        actorId: userId,
+        action: AuditAction.CHANGE_PASSWORD_FAILED,
+        targetType: "users",
+        targetId: userId,
+        description: `Change password failed: ${error.message}`,
+        ipAddress: req.ip,
+        status: "FAILED",
       });
 
       res.status(400).json({ error: error.message });

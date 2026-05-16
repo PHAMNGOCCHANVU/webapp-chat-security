@@ -107,13 +107,89 @@ router.delete("/users/:id", AdminController.deleteUser);
  * @swagger
  * /api/v1/admin/audit-logs:
  *   get:
- *     summary: Xem audit logs (Admin)
+ *     summary: Xem audit logs với bộ lọc nâng cao (Admin)
  *     tags: [Admin]
  *     security:
  *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: action
+ *         schema:
+ *           type: string
+ *         description: Lọc theo loại hành động (ví dụ LOGIN, REGISTER, ACCESS_DENIED)
+ *       - in: query
+ *         name: actor
+ *         schema:
+ *           type: string
+ *         description: Lọc theo ID người thực hiện
+ *       - in: query
+ *         name: targetType
+ *         schema:
+ *           type: string
+ *         description: Lọc theo loại đối tượng (ví dụ users, conversations, API)
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [SUCCESS, FAILED]
+ *         description: Lọc theo trạng thái
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *           example: "2026-05-01"
+ *         description: Từ ngày (YYYY-MM-DD)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *           example: "2026-05-16"
+ *         description: Đến ngày (YYYY-MM-DD)
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Tìm kiếm trong nội dung mô tả (description)
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Số trang (bắt đầu từ 1)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *           maximum: 100
+ *         description: Số bản ghi mỗi trang (tối đa 100)
  *     responses:
  *       200:
  *         description: Thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *       400:
+ *         description: Tham số không hợp lệ
  */
 router.get("/audit-logs", AdminController.getAuditLogs);
 

@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import { sessionConfig } from "./config/session";
+import { auditLogger } from "./middlewares/audit.middleware";
 import authRoutes from "./routes/auth.routes";
 import roomRoutes from "./routes/room.routes";
 import adminRoutes from "./routes/admin.routes";
@@ -28,6 +29,10 @@ app.use(cors({
 app.use(express.json());
 app.use(morgan("dev"));
 app.use(sessionConfig);
+
+// Auto-audit middleware — ghi log tự động cho POST/PUT/PATCH/DELETE
+// Phải đặt sau sessionConfig (cần session để lấy userId)
+app.use(auditLogger);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });

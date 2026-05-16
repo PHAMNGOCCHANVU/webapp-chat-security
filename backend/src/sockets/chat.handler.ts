@@ -1,6 +1,6 @@
 import { Server, Socket } from "socket.io";
 import { prisma } from "../config/prisma";
-import { logAudit } from "../services/audit.service";
+import { logAudit, AuditAction } from "../services/audit.service";
 
 interface UserSession {
   userId: string;
@@ -53,7 +53,7 @@ export async function setupSocketHandlers(io: Server) {
     // Track connection
     await logAudit({
       actorId: userId,
-      action: "SOCKET_CONNECT",
+      action: AuditAction.SOCKET_CONNECT,
       targetType: "Socket",
       targetId: socket.id,
       description: `User connected to chat`,
@@ -175,7 +175,7 @@ export async function setupSocketHandlers(io: Server) {
 
         await logAudit({
           actorId: userId,
-          action: "LEAVE_ROOM",
+          action: AuditAction.LEAVE_ROOM,
           targetType: "Conversation",
           targetId: conversationId,
           description: `User left conversation`,
@@ -237,7 +237,7 @@ export async function setupSocketHandlers(io: Server) {
         // Audit log
         await logAudit({
           actorId: userId,
-          action: "SEND_MESSAGE",
+          action: AuditAction.SEND_MESSAGE,
           targetType: "Message",
           targetId: message.id,
           description: `Sent message in conversation ${conversationId}`,
@@ -387,7 +387,7 @@ export async function setupSocketHandlers(io: Server) {
       // Audit log
       await logAudit({
         actorId: userId,
-        action: "SOCKET_DISCONNECT",
+        action: AuditAction.SOCKET_DISCONNECT,
         targetType: "Socket",
         targetId: socket.id,
         description: `User disconnected from chat`,

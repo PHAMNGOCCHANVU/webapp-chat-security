@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { AdminService } from "../services/admin.service";
-import { logAudit } from "../services/audit.service";
+import { logAudit, AuditAction } from "../services/audit.service";
 import { prisma } from "../config/prisma";
 import { z } from "zod";
 
@@ -31,11 +31,13 @@ export class AdminController {
 
       await logAudit({
         actorId: req.session.userId!,
-        action: "UPDATE_USER_STATUS",
+        action: AuditAction.UPDATE_USER_STATUS,
         targetType: "User",
         targetId: id,
-        description: `Changed status to ${status}`,
+        description: `Changed user status to ${status}`,
+        metadata: { newStatus: status },
         ipAddress: req.ip,
+        status: "SUCCESS",
       });
 
       res.json(user);
@@ -54,11 +56,13 @@ export class AdminController {
 
       await logAudit({
         actorId: req.session.userId!,
-        action: "UPDATE_USER_ROLE",
+        action: AuditAction.UPDATE_USER_ROLE,
         targetType: "User",
         targetId: id,
-        description: `Changed role to ${role}`,
+        description: `Changed user role to ${role}`,
+        metadata: { newRole: role },
         ipAddress: req.ip,
+        status: "SUCCESS",
       });
 
       res.json(user);
@@ -70,15 +74,36 @@ export class AdminController {
 
   static async getAuditLogs(req: Request, res: Response) {
     try {
-      const { action, actor } = req.query;
-      const filters: any = {};
+      // Schema validate query params
+      const querySchema = z.object({
+        action: z.string().optional(),
+        actor: z.string().optional(),    // actorId
+        targetType: z.string().optional(),
+        status: z.enum(["SUCCESS", "FAILED"]).optional(),
+        startDate: z.string().optional().transform((val) => val ? new Date(val) : undefined),
+        endDate: z.string().optional().transform((val) => val ? new Date(val) : undefined),
+        page: z.string().optional().transform((val) => val ? parseInt(val, 10) : 1),
+        limit: z.string().optional().transform((val) => val ? parseInt(val, 10) : 50),
+        search: z.string().optional(),
+      });
 
-      if (action && typeof action === "string") filters.action = action;
-      if (actor && typeof actor === "string") filters.actor = actor;
+      const parsed = querySchema.parse(req.query);
 
-      const logs = await AdminService.getAuditLogs(filters);
+      const logs = await AdminService.getAuditLogs({
+        action: parsed.action,
+        actorId: parsed.actor,
+        startDate: parsed.startDate,
+        endDate: parsed.endDate,
+        targetType: parsed.targetType,
+        status: parsed.status,
+        page: parsed.page,
+        limit: parsed.limit,
+        search: parsed.search,
+      });
+
       res.json(logs);
     } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
       res.status(500).json({ error: err.message });
     }
   }
@@ -98,11 +123,13 @@ export class AdminController {
 
       await logAudit({
         actorId: currentUserId!,
-        action: "DELETE_USER",
+        action: AuditAction.DELETE_USER,
         targetType: "User",
         targetId: id,
-        description: `Deleted user: ${user.username}`,
+        description: `Deleted user: ${user.username} (${user.email})`,
+        metadata: { deletedUsername: user.username },
         ipAddress: req.ip,
+        status: "SUCCESS",
       });
 
       res.json({ message: "User deleted successfully", user });

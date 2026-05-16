@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { RoomService, createRoomSchema, addMemberSchema } from "../services/room.service";
-import { logAudit } from "../services/audit.service";
+import { logAudit, AuditAction } from "../services/audit.service";
 import { z } from "zod";
 
 export class RoomController {
@@ -20,11 +20,13 @@ export class RoomController {
 
       await logAudit({
         actorId: req.session.userId!,
-        action: "CREATE_CONVERSATION",
+        action: AuditAction.CREATE_CONVERSATION,
         targetType: "Conversation",
         targetId: room.id,
         description: `Created conversation: ${room.conversationName || room.id}`,
+        metadata: { conversationType: room.conversationType },
         ipAddress: req.ip,
+        status: "SUCCESS",
       });
 
       res.status(201).json(room);
@@ -65,11 +67,13 @@ export class RoomController {
 
       await logAudit({
         actorId: req.session.userId!,
-        action: "ADD_MEMBER",
+        action: AuditAction.ADD_MEMBER,
         targetType: "ConversationMember",
         targetId: req.params.id,
         description: `Added member ${data.userId} to conversation`,
+        metadata: { newMemberId: data.userId },
         ipAddress: req.ip,
+        status: "SUCCESS",
       });
 
       res.status(201).json(member);
@@ -86,11 +90,13 @@ export class RoomController {
 
       await logAudit({
         actorId: req.session.userId!,
-        action: "REMOVE_MEMBER",
+        action: AuditAction.REMOVE_MEMBER,
         targetType: "Conversation",
         targetId: req.params.id,
         description: `Removed member ${req.params.userId} from conversation`,
+        metadata: { removedMemberId: req.params.userId },
         ipAddress: req.ip,
+        status: "SUCCESS",
       });
 
       res.status(200).json({ message: "Member removed successfully" });

@@ -96,31 +96,90 @@ export class AdminService {
     };
   }
 
-  static async getAuditLogs(filters?: { action?: string; actor?: string }) {
+  static async getAuditLogs(filters?: {
+    action?: string;
+    actorId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    targetType?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+    search?: string;
+  }) {
+    const page = Math.max(1, filters?.page ?? 1);
+    const limit = Math.min(100, Math.max(1, filters?.limit ?? 50));
+    const skip = (page - 1) * limit;
+
+    // Xây dựng mệnh đề WHERE động
     const whereClause: any = {};
 
     if (filters?.action) {
-      whereClause.action = filters.action;
+      whereClause.actionType = filters.action;
     }
 
-    if (filters?.actor) {
-      whereClause.actorId = filters.actor;
+    if (filters?.actorId) {
+      whereClause.actorUserId = filters.actorId;
     }
 
-    return prisma.auditLog.findMany({
-      where: whereClause,
-      orderBy: { createdAt: "desc" },
-      include: {
-        actor: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
+    if (filters?.targetType) {
+      whereClause.targetTable = filters.targetType;
+    }
+
+    if (filters?.status) {
+      whereClause.actionStatus = filters.status;
+    }
+
+    // Lọc theo khoảng thời gian
+    if (filters?.startDate || filters?.endDate) {
+      whereClause.createdAt = {};
+      if (filters.startDate) {
+        whereClause.createdAt.gte = filters.startDate;
+      }
+      if (filters.endDate) {
+        // Đặt end date tới cuối ngày (23:59:59)
+        const endOfDay = new Date(filters.endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        whereClause.createdAt.lte = endOfDay;
+      }
+    }
+
+    // Tìm kiếm trong description
+    if (filters?.search) {
+      whereClause.description = {
+        contains: filters.search,
+      };
+    }
+
+    // Thực hiện 2 query song song: lấy dữ liệu & đếm tổng
+    const [data, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where: whereClause,
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip,
+        include: {
+          actor: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+            },
           },
         },
+      }),
+      prisma.auditLog.count({ where: whereClause }),
+    ]);
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-      take: 100, // Limit to 100 recent logs
-    });
+    };
   }
 
   static async deleteUser(userId: string) {
