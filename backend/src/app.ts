@@ -6,8 +6,12 @@ import { sessionConfig } from "./config/session";
 import authRoutes from "./routes/auth.routes";
 import roomRoutes from "./routes/room.routes";
 import adminRoutes from "./routes/admin.routes";
+import { setupSwagger } from "./config/swagger";
 
 const app = express();
+
+// Setup Swagger
+setupSwagger(app);
 
 app.use(helmet());
 const allowedOrigins = ["http://127.0.0.1:5500", "http://127.0.0.1:5501", "http://localhost:5500", "http://localhost:5501"];
