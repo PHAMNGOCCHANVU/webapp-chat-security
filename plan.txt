@@ -1,0 +1,221 @@
+## 📋 KẾ HOẠCH CHI TIẾT KẾT NỐI BACKEND-FRONTEND
+
+Tôi đã phân tích kỹ cả Backend (PHASE_2, PHASE_3, PHASE_4) và Frontend. Dưới đây là kế hoạch chi tiết:
+
+---
+
+## 🔍 TÌNH TRẠNG HIỆN TẠI
+
+### Backend ✅ (Hoàn thiện)
+- **Port**: 3000 (API Base: `http://localhost:3000/api/v1`)
+- **Endpoints**: 18 REST + 8 Socket.IO events
+- **Status**: 0 compilation errors, sẵn sàng
+
+### Frontend ⚠️ (Cần sửa)
+- **Port**: 5173 (HTTP Server - chưa tạo)
+- **Files**: 8 HTML pages + 4 JS files
+- **Issues**:
+  - ❌ Port 4000 → ✅ Cần 3000
+  - ❌ API endpoint `/auth/me` → ✅ Cần `/auth/profile`
+  - ❌ Socket event `roomId` → ✅ Cần `conversationId`
+  - ❌ Thiếu Socket.IO client library
+  - ❌ API_BASE không được khai báo trong chat.js
+
+---
+
+## 📝 VẤN ĐỀ CHI TIẾT
+
+| # | Vấn đề | File | Sửa từ | Sửa thành | Mức độ |
+|---|--------|------|--------|-----------|--------|
+| 1 | Port API | Tất cả JS | 4000 | 3000 | 🔴 Critical |
+| 2 | Endpoint Auth | app.js | `/auth/me` | `/auth/profile` | 🔴 Critical |
+| 3 | Field Names | app.js, chat.js | `roomId` | `conversationId` | 🔴 Critical |
+| 4 | Socket URL | app.js, chat.js | 4000 | 3000 | 🔴 Critical |
+| 5 | Chat.js không có API_BASE | chat.js | ❌ | Thêm định nghĩa | 🟠 High |
+| 6 | Thiếu Socket.IO script | HTML pages | ❌ | Thêm CDN | 🟠 High |
+| 7 | HTTP Server | frontend/ | ❌ | package.json | 🟡 Medium |
+
+---
+
+## 🎯 KẾ HOẠCH THỰC HIỆN
+
+### **PHASE 1: Chuẩn bị Infrastructure (2-3 giờ)**
+
+**1.1 Tạo HTTP Server cho Frontend**
+- [ ] Tạo `frontend/package.json`
+  ```json
+  {
+    "scripts": {
+      "dev": "http-server -p 5173 -c-1"
+    }
+  }
+  ```
+
+**1.2 Tạo API Service Utilities**
+- [ ] `frontend/js/config.js` - Khai báo API_BASE, SOCKET_URL
+- [ ] `frontend/js/api.js` - Service functions cho Auth, Rooms, Admin API calls
+- [ ] `frontend/js/socketService.js` - Socket.IO wrapper cho events
+
+**1.3 Chuẩn bị HTML Pages**
+- [ ] Thêm Socket.IO script vào tất cả pages
+- [ ] Kiểm tra form IDs
+
+---
+
+### **PHASE 2: Sửa API Calls (3-4 giờ)**
+
+**2.1 Sửa auth.js**
+- [ ] Line 1: Đổi `API_BASE = "http://localhost:4000"` → `3000`
+- [ ] Kiểm tra endpoints: register, login, logout ✓ (đúng)
+
+**2.2 Sửa app.js** (QUAN TRỌNG ⚠️)
+- [ ] Line 2: Đổi port 4000 → 3000
+- [ ] Line 12: `/auth/me` → `/auth/profile`
+- [ ] Line 20: Xóa endpoint `/auth/users` (không tồn tại)
+- [ ] Line 22: Socket URL 4000 → 3000
+- [ ] Line 27: `roomId` → `conversationId`
+- [ ] Line 35: Xóa field `isDirect` (sửa thành `conversationType`)
+- [ ] Line 40: Sửa `room.name` → `room.conversationName`
+
+**2.3 Sửa admin.js**
+- [ ] Line 4: Đổi port 4000 → 3000
+- [ ] Kiểm tra field names: actionType, actor, etc. ✓
+
+**2.4 Sửa/Tạo chat.js**
+- [ ] Thêm API_BASE definition (line 1)
+- [ ] Line 13: Sửa `/auth/me` → `/auth/profile`
+- [ ] Line 20: Socket URL 4000 → 3000
+- [ ] Line 28: `roomId` → `conversationId`
+- [ ] Line 67: `roomId` → `conversationId`
+- [ ] Line 82: Sửa field names (isPrivate → conversationType)
+
+---
+
+### **PHASE 3: Tạo HTTP Server & Start (1-2 giờ)**
+
+**3.1 Cài dependencies**
+```bash
+cd frontend/
+npm install
+```
+
+**3.2 Kiểm tra server**
+```bash
+npm run dev
+# Truy cập: http://localhost:5173
+```
+
+---
+
+### **PHASE 4: Testing & Validation (4-5 giờ)**
+
+**Test Flows**:
+
+| Flow | Steps | Expected | Status |
+|------|-------|----------|--------|
+| **Registration** | Email → Username → Password → Register | 201 Created | 🔄 |
+| **Login** | Email → Password → Login | Session Cookie | 🔄 |
+| **Profile** | GET /auth/profile | User data (id, email, etc.) | 🔄 |
+| **Chat** | Create room → Join → Send message | Real-time message | 🔄 |
+| **Admin** | GET /admin/audit-logs | Audit log list | 🔄 |
+
+---
+
+## 📊 MAPPING API ENDPOINTS
+
+### Authentication Endpoints (Backend ✅)
+```
+POST   /api/v1/auth/register        ← Frontend: auth.js
+POST   /api/v1/auth/login           ← Frontend: auth.js
+POST   /api/v1/auth/logout          ← Frontend: auth.js
+GET    /api/v1/auth/profile         ← Frontend: app.js, chat.js (sửa từ /auth/me)
+PUT    /api/v1/auth/profile         ← Frontend: app.js (update profile)
+POST   /api/v1/auth/change-password ← Frontend: (nếu có forgot-password.html)
+```
+
+### Chat Endpoints (Backend ✅)
+```
+GET    /api/v1/rooms                ← Frontend: app.js (listRooms)
+POST   /api/v1/rooms                ← Frontend: app.js (createRoom)
+GET    /api/v1/rooms/:id            ← Frontend: app.js (getRoomDetails)
+GET    /api/v1/rooms/:id/messages   ← Frontend: app.js, chat.js (getMessages)
+POST   /api/v1/rooms/:id/members    ← Frontend: app.js (addMember)
+DELETE /api/v1/rooms/:id/members/:userId ← Frontend: app.js (removeMember)
+```
+
+### Socket.IO Events (Backend ✅)
+```
+join-room              ← Frontend: app.js, chat.js (sửa roomId → conversationId)
+leave-room             ← Frontend: app.js, chat.js
+send-message           ← Frontend: app.js, chat.js
+typing                 ← Frontend: app.js, chat.js (nếu có)
+get-message-history    ← Frontend: app.js, chat.js
+get-active-users       ← Frontend: app.js, chat.js (nếu có)
+```
+
+### Admin Endpoints (Backend ✅)
+```
+GET    /api/v1/admin/audit-logs    ← Frontend: admin.js
+GET    /api/v1/admin/users         ← Frontend: admin.html (nếu có)
+PATCH  /api/v1/admin/users/:id/role ← Frontend: admin.html (nếu có)
+```
+
+---
+
+## 📁 FILES CẦN TẠO/SỬA
+
+### ✨ Tạo mới (3 files):
+1. **frontend/package.json** - HTTP server config
+2. **frontend/js/config.js** - Cấu hình tập trung
+3. **frontend/js/api.js** - API service utilities
+
+### 🔧 Sửa hiện có (6 files):
+1. **auth.js** - Port, endpoints ✓
+2. **app.js** - Port, endpoints, socket events ⚠️ (nhiều sửa)
+3. **admin.js** - Port
+4. **chat.js** - Thêm API_BASE, port, socket ⚠️
+5. **login.html** - Kiểm tra IDs
+6. **register.html** - Kiểm tra IDs
+
+---
+
+## ⏱️ TIMELINE
+
+| Phase | Task | Hours | Effort |
+|-------|------|-------|--------|
+| 1 | Prepare Infrastructure | 2-3h | 🟠 Medium |
+| 2 | Fix API Calls | 3-4h | 🔴 High |
+| 3 | Setup HTTP Server | 1-2h | 🟡 Low |
+| 4 | Testing & Validation | 4-5h | 🔴 High |
+| **TOTAL** | **End-to-End** | **10-14h** | - |
+
+---
+
+## ✅ SUCCESS CRITERIA
+
+- ✓ Frontend loads at http://localhost:5173
+- ✓ Register & Login work
+- ✓ Profile shows correctly
+- ✓ Create & join chat rooms
+- ✓ Send/receive messages (real-time)
+- ✓ No console errors
+- ✓ All APIs return 200-201 OK
+
+---
+
+## 🚀 BẠN MUỐN TÔI THỰC HIỆN ĐIỀU GÌ?
+
+**Tôi sẵn sàng**:
+
+1. ✏️ **Sửa tất cả JS files** (auth.js, app.js, admin.js, chat.js)
+2. 📦 **Tạo utilities** (config.js, api.js, socketService.js)
+3. 📄 **Tạo package.json** cho frontend
+4. 🧪 **Tạo test script** để verify tất cả APIs
+
+**Bạn chọn**:
+- [ ] Thực hiện Phase 1+2+3 ngay (chuẩn bị hoàn toàn)
+- [ ] Chỉ Phase 1 (tạo utilities)
+- [ ] Chỉ Phase 2 (sửa JS files)
+- [ ] Tất cả? (Full implementation)
+
+Bạn muốn tôi bắt đầu từ đâu? 🎯

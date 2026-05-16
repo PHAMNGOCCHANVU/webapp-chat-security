@@ -24,3 +24,9 @@ Thumbs.db
 
 # Prisma local artifacts
 backend/prisma/dev.db
+
+*sql
+BACKEND_COMPLETION_STATUS.md 
+db_init_sql
+*.txt
+backend/*.md

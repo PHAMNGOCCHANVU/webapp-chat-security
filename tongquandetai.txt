@@ -1,0 +1,15 @@
+PHẦN 1: TỔNG QUAN
+1.1. Các chức năng chính
+Hệ thống Webapp nhắn tin thời gian thực được xây dựng với các nhóm chức năng chính nhằm đáp ứng nhu cầu sử dụng thực tế, đồng thời bảo đảm yêu cầu quản lý và bảo mật dữ liệu. Các chức năng của hệ thống được chia thành các nhóm như sau: 
+-	Thứ nhất, nhóm chức năng xác thực và quản lý tài khoản. Hệ thống cho phép người dùng đăng ký tài khoản, đăng nhập, đăng xuất, xem thông tin cá nhân và cập nhật một số thông tin của bản thân. Nhóm chức năng này giúp người dùng truy cập hệ thống một cách an toàn và thuận tiện trong quá trình sử dụng. 
+-	Thứ hai, nhóm chức năng phòng chat và tin nhắn. Người dùng có thể xem danh sách các phòng chat mà mình được phép tham gia, truy cập vào phòng chat, gửi và nhận tin nhắn theo thời gian thực, tìm kiếm bạn bè, kết bạn, tạo nhóm chat, chỉnh sửa thông tin nhóm và xóa thành viên nhóm, đồng thời xem lại lịch sử hội thoại đã được lưu trữ. Đối với quản trị viên được thừa hưởng các chức năng của user nhưng có thêm tính năng quản lý hệ thống chỉ riêng quản trị viên mới có. 
+-	Thứ ba, nhóm chức năng phân quyền và quản trị hệ thống. Hệ thống hỗ trợ quản lý tài khoản người dùng, quản lý vai trò và phân quyền truy cập, bảo đảm mỗi người dùng chỉ được thao tác trong phạm vi cho phép. Chức năng này giúp tăng tính an toàn, kiểm soát tốt hoạt động của hệ thống và hạn chế các truy cập trái phép. 
+-	Thứ tư, nhóm chức năng ghi nhận nhật ký hoạt động. Hệ thống ghi nhận các sự kiện quan trọng như đăng nhập, đăng xuất, thay đổi thông tin, thao tác quản trị và các truy cập bị từ chối. Quản trị viên có thể theo dõi các nhật ký này để kiểm tra, giám sát và hỗ trợ bảo đảm an toàn cho toàn bộ hệ thống. 
+PHẦN 2: PHÂN TÍCH VÀ THIẾT KẾ HỆ THỐNG
+2.1. Kiến trúc tổng thể
+-	Hệ thống được thiết kế theo mô hình Client - Server, tách biệt giữa giao diện người dùng, tầng xử lý nghiệp vụ và tầng cơ sở dữ liệu. Cách tổ chức này giúp hệ thống dễ mở rộng, dễ kiểm soát bảo mật và thuận tiện khi kiểm thử từng thành phần.
+Thành phần	Công nghệ sử dụng	Vai trò trong hệ thống
+Frontend	HTML5, CSS3, Tailwind CSS, Vanilla JavaScript, Axios, Socket.IO-client	Hiển thị giao diện, gọi REST API, duy trì kết nối realtime để nhận tin nhắn mới.
+Backend	Node.js, Express.js, Socket.IO, express-session	Xử lý nghiệp vụ, xác thực phiên đăng nhập, kiểm tra quyền, điều phối realtime và giao tiếp với CSDL.
+Database	Microsoft SQL Server	Lưu trữ người dùng, hội thoại, tin nhắn, vai trò, quyền và nhật ký hệ thống.
+ORM	Prisma	Ánh xạ dữ liệu giữa JavaScript và SQL Server, giảm rủi ro SQL Injection bằng truy vấn có tham số.

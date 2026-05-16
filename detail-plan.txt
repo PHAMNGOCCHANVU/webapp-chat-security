@@ -1,0 +1,66 @@
+Tôi sẽ phân tích hai file đã cung cấp và tạo một bảng kế hoạch thực thi Backend chi tiết. 
+
+✅ Đã tạo bảng kế hoạch thực thi Backend chi tiết dựa trên tongquandetai.txt và plan.txt. Đây là kế hoạch toàn diện với 77-92 giờ làm việc, chia thành 7 giai đoạn:
+
+## 📋 TÓMLƯỢC KẾ HOẠCH
+
+### **Giai Đoạn 1: Thiết lập DB (8-10h)**
+- Prisma schema cho User, Room, Message, AuditLog
+- SQL Server triggers chống sửa/xóa audit logs
+- Stored procedure khóa tài khoản
+
+### **Giai Đoạn 2: Authentication (12-15h)**
+- Mật khẩu hash với Argon2id
+- Express-session với HttpOnly cookies
+- Endpoints: Register, Login, Logout, Profile
+- Zod validation
+
+### **Giai Đoạn 3: RBAC Middleware (5-6h)**
+- Middleware `requireAuth`, `requireRole`, `requireRoomMember`
+- Protect admin routes
+- Kiểm tra quyền truy cập resources
+
+### **Giai Đoạn 4: Socket.IO Chat (9-11h)**
+- Socket authentication dựa trên session
+- Events: join-room, leave-room, send-message, user-typing
+- Connection/disconnect tracking
+- Message history API với pagination
+
+### **Giai Đoạn 5: Audit Logging (8-10h)**
+- Auto-logging middleware cho POST/PUT/DELETE
+- Admin API xem audit logs
+- Lọc theo actor, action, date range
+- Explicit logs cho login/logout, room ops, admin actions
+
+### **Giai Đoạn 6: Bảo Mật Nâng Cao (10-12h)**
+- Helmet.js: CSP, X-Frame-Options, HSTS
+- CORS whitelist
+- Rate limiting: auth (5/15m), register (3/h), messages (10/m)
+- Input sanitization, prevent XSS
+- Response compression
+
+### **Giai Đoạn 7: Testing & Deploy (12-15h)**
+- E2E tests: auth flow, messaging, admin ops
+- Security tests: CORS, rate limiting, SQL injection
+- API documentation
+- Environment setup guide
+
+## 🔗 **Dependencies Flow**
+```
+Phase 1 (Database) ──→ Phase 2 (Auth) ──→ Phase 3 (RBAC)
+                                     ├──→ Phase 4 (Chat)
+                                     ├──→ Phase 5 (Audit)
+                         Phase 6 (Security) ──→ Phase 7 (Testing)
+```
+
+## ⏱️ **Timeline Khuyến Nghị**
+- **Tuần 1-2:** Phase 1 + 2 (DB + Auth)
+- **Tuần 3:** Phase 3 + 4 (RBAC + Chat) - parallel
+- **Tuần 4:** Phase 5 (Audit logging)
+- **Tuần 5:** Phase 6 (Security hardening)
+- **Tuần 6:** Phase 7 (Testing & deploy)
+
+Bảng kế hoạch chi tiết (với từng task, file cần modify, dependency, ước lượng giờ) đã được lưu. Bạn muốn tôi:
+1. **Xuất dạng bảng Excel/CSV** để dễ tracking?
+2. **Chi tiết hơn** từng phase nào?
+3. **Bắt đầu implement** phase 1 ngay?
