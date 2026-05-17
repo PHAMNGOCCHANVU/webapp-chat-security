@@ -1,4 +1,5 @@
 import { prisma } from "../config/prisma";
+import { ensureUserHasRole } from "./rbac-catalog.service";
 import { z } from "zod";
 
 export const createRoomSchema = z.object({
@@ -15,6 +16,7 @@ export class RoomService {
     // Return all public group conversations + private conversations where user is a member
     return prisma.conversation.findMany({
       where: {
+        status: { not: "DELETED" },
         OR: [
           { conversationType: "GROUP" },
           { members: { some: { userId } } }
@@ -32,26 +34,36 @@ export class RoomService {
   static async createRoom(userId: string, data: z.infer<typeof createRoomSchema>) {
     const conversationType = data.isPrivate ? "PRIVATE" : "GROUP";
     
-    return prisma.conversation.create({
-      data: {
-        conversationType,
-        conversationName: data.name,
-        createdBy: userId,
-        members: {
-          create: {
-            userId: userId,
-            joinedAt: new Date(),
+    return prisma.$transaction(async (tx) => {
+      const room = await tx.conversation.create({
+        data: {
+          conversationType,
+          conversationName: data.name,
+          status: "ACTIVE",
+          createdBy: userId,
+          members: {
+            create: {
+              userId: userId,
+              joinedAt: new Date(),
+              memberRole: conversationType === "GROUP" ? "OWNER" : "MEMBER",
+            }
+          }
+        },
+        include: {
+          creator: { select: { id: true, username: true, displayName: true } },
+          members: {
+            include: {
+              user: { select: { id: true, username: true, displayName: true } }
+            }
           }
         }
-      },
-      include: {
-        creator: { select: { id: true, username: true, displayName: true } },
-        members: {
-          include: {
-            user: { select: { id: true, username: true, displayName: true } }
-          }
-        }
+      });
+
+      if (conversationType === "GROUP") {
+        await ensureUserHasRole(tx, userId, "OWNER");
       }
+
+      return room;
     });
   }
 
@@ -67,6 +79,7 @@ export class RoomService {
     });
 
     if (!conversation) throw new Error("Room not found");
+    if (conversation.status === "DELETED") throw new Error("Room not found");
 
     // Check access: user must be a member or it's a GROUP conversation
     if (conversation.conversationType === "PRIVATE") {
@@ -87,7 +100,10 @@ export class RoomService {
     await this.getRoomDetails(conversationId, userId);
 
     return prisma.message.findMany({
-      where: { conversationId },
+      where: {
+        conversationId,
+        isDeleted: false,
+      },
       orderBy: { createdAt: "desc" },
       take: limit,
       skip: offset,
@@ -104,6 +120,7 @@ export class RoomService {
     });
 
     if (!conversation) throw new Error("Conversation not found");
+    if (conversation.status === "DELETED") throw new Error("Conversation has been deleted");
     if (conversation.createdBy !== adderId) {
       throw new Error("Forbidden: Only conversation creator can add members");
     }
@@ -143,6 +160,7 @@ export class RoomService {
     });
 
     if (!conversation) throw new Error("Conversation not found");
+    if (conversation.status === "DELETED") throw new Error("Conversation has been deleted");
 
     const isCreator = conversation.createdBy === removerId;
     const removingSelf = removerId === targetUserId;

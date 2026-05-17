@@ -1,79 +1,22 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ZALEGRAM - Secure Internal Chat</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style type="text/tailwindcss">
-      @theme {
-        --color-primary: #3b82f6;
-        --color-primary-dark: #2563eb;
-      }
-    </style>
-  </head>
-  <body class="bg-gray-50 text-gray-800 min-h-screen flex items-center justify-center font-sans">
-    
-    <div class="max-w-3xl w-full mx-4">
-      <div class="text-center mb-10">
-        <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 mb-4">
-          ZALEGRAM
-        </h1>
-        <p class="text-xl text-gray-500">Secure Realtime Internal Communication</p>
-      </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        <!-- Auth Card -->
-        <a href="./pages/login.html" class="group block bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 hover:border-blue-200">
-          <div class="p-8">
-            <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
-            </div>
-            <h3 class="text-2xl font-bold mb-2">Authentication</h3>
-            <p class="text-gray-500">Argon2id secured Login & Registration system.</p>
-          </div>
-        </a>
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300..800&family=Space+Mono:wght@400;700&display=swap"
+    rel="stylesheet"
+  />
+  <title>frontend</title>
+</head>
 
-        <!-- Chat Card -->
-        <a href="./pages/chat-room.html" class="group block bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 hover:border-purple-200">
-          <div class="p-8">
-            <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
-            </div>
-            <h3 class="text-2xl font-bold mb-2">Chat Rooms</h3>
-            <p class="text-gray-500">Realtime WebSocket messaging with Socket.IO.</p>
-          </div>
-        </a>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
 
-        <!-- Audit Card -->
-        <a href="./pages/audit-log.html" class="group block bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 hover:border-emerald-200">
-          <div class="p-8">
-            <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            </div>
-            <h3 class="text-2xl font-bold mb-2">Audit Logs</h3>
-            <p class="text-gray-500">Admin tracking of sensitive actions and RBAC.</p>
-          </div>
-        </a>
-
-        <!-- Denied Card -->
-        <a href="./pages/access-denied.html" class="group block bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 hover:border-red-200">
-          <div class="p-8">
-            <div class="w-12 h-12 bg-red-100 text-red-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-            </div>
-            <h3 class="text-2xl font-bold mb-2">Access Denied</h3>
-            <p class="text-gray-500">Preview 403 Forbidden page for unauthorized access.</p>
-          </div>
-        </a>
-
-      </div>
-      
-      <div class="mt-12 text-center text-sm text-gray-400">
-        <p>Hồ Quốc Huy - Phạm Ngọc Chấn Vũ - Nguyễn Uyên Vy</p>
-        <p>Bảo mật cơ sở dữ liệu &copy; 2026</p>
-      </div>
-    </div>
-  </body>
 </html>

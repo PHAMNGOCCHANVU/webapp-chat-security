@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import { AuthService } from "../services/auth.service";
 import { RegisterSchema, LoginSchema, UpdateProfileSchema, ChangePasswordSchema } from "../services/validators";
-import { prisma } from "../config/prisma";
+import { logAudit } from "../services/audit.service";
 import { z } from "zod";
+import jwt from "jsonwebtoken";
 
 /**
  * Auth Controller - Handle authentication endpoints
@@ -17,22 +18,34 @@ export class AuthController {
       const data = RegisterSchema.parse(req.body);
       const user = await AuthService.register(data);
 
-      // Log audit
-      await prisma.auditLog.create({
-        data: {
-          actorUserId: user.id,
-          actionType: "REGISTER",
-          targetTable: "users",
-          targetId: user.id,
-          actionStatus: "SUCCESS",
-          ipAddress: req.ip,
-          description: `User registered: ${user.username}`,
-        },
+      await logAudit({
+        actorId: user.id,
+        action: "REGISTER",
+        module: "AUTH",
+        targetType: "USER",
+        targetId: user.id,
+        description: `User registered: ${user.username}`,
+        request: req,
+      });
+
+      // Generate JWT
+      const token = jwt.sign(
+        { userId: user.id, username: user.username },
+        process.env.JWT_SECRET || "default_jwt_secret",
+        { expiresIn: "1d" }
+      );
+
+      // Set cookie
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 24 * 60 * 60 * 1000, // 1 day
       });
 
       res.status(201).json({
         message: "Registration successful",
         user,
+        token,
       });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -42,15 +55,13 @@ export class AuthController {
         });
       }
 
-      // Log failed attempt
-      await prisma.auditLog.create({
-        data: {
-          actionType: "REGISTER",
-          targetTable: "users",
-          actionStatus: "FAILED",
-          ipAddress: req.ip,
-          description: `Registration failed: ${error.message}`,
-        },
+      await logAudit({
+        action: "REGISTER",
+        module: "AUTH",
+        targetType: "USER",
+        description: `Registration failed: ${error.message}`,
+        request: req,
+        status: "FAILED",
       });
 
       res.status(400).json({ error: error.message });
@@ -63,29 +74,58 @@ export class AuthController {
    */
   static async login(req: Request, res: Response) {
     try {
+      // 1. lấy input
       const data = LoginSchema.parse(req.body);
+      
+      // 2. lấy hashedPassword trong db để so với password input (done in AuthService.login)
       const user = await AuthService.login(data);
 
-      // Set session
-      (req.session as any).userId = user.id;
-      (req.session as any).username = user.username;
+      // 3. nếu khớp, tạo accessToken với JWT
+      const accessToken = jwt.sign(
+        { userId: user.id, username: user.username },
+        process.env.JWT_SECRET || "default_jwt_secret",
+        { expiresIn: "3m" }
+      );
 
-      // Log audit
-      await prisma.auditLog.create({
-        data: {
-          actorUserId: user.id,
-          actionType: "LOGIN",
-          targetTable: "users",
+      // 4. tạo refresh token
+      const refreshToken = jwt.sign(
+        { userId: user.id },
+        process.env.JWT_REFRESH_SECRET || "default_refresh_secret",
+        { expiresIn: "7d" }
+      );
+
+      // 5. tạo session mới để lưu refresh token
+      req.session.regenerate(async (err) => {
+        if (err) {
+          return res.status(500).json({ error: "Could not create session" });
+        }
+
+        (req.session as any).userId = user.id;
+        (req.session as any).refreshToken = refreshToken;
+
+        await logAudit({
+          actorId: user.id,
+          action: "LOGIN_SUCCESS",
+          module: "AUTH",
+          targetType: "USER",
           targetId: user.id,
-          actionStatus: "SUCCESS",
-          ipAddress: req.ip,
           description: `User logged in: ${user.username}`,
-        },
-      });
+          request: req,
+        });
 
-      res.status(200).json({
-        message: "Login successful",
-        user,
+        // 6. trả refresh token về trong cookie
+        res.cookie("refreshToken", refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        });
+
+        // 7. trả access token về trong res
+        res.status(200).json({
+          message: "Login successful",
+          accessToken,
+          user,
+        });
       });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -95,15 +135,13 @@ export class AuthController {
         });
       }
 
-      // Log failed login attempt
-      await prisma.auditLog.create({
-        data: {
-          actionType: "LOGIN",
-          targetTable: "users",
-          actionStatus: "FAILED",
-          ipAddress: req.ip,
-          description: `Login failed: ${error.message}`,
-        },
+      await logAudit({
+        action: "LOGIN_FAILED",
+        module: "AUTH",
+        targetType: "SESSION",
+        description: `Login failed: ${error.message}`,
+        request: req,
+        status: "FAILED",
       });
 
       res.status(401).json({ error: error.message });
@@ -118,28 +156,33 @@ export class AuthController {
     const userId = (req.session as any).userId;
 
     try {
+      // 1. lấy refresh token từ cookie
+      req.cookies?.refreshToken;
+
       // Log audit before destroying session
       if (userId) {
-        await prisma.auditLog.create({
-          data: {
-            actorUserId: userId,
-            actionType: "LOGOUT",
-            targetTable: "users",
-            targetId: userId,
-            actionStatus: "SUCCESS",
-            ipAddress: req.ip,
-            description: "User logged out",
-          },
+        await logAudit({
+          actorId: userId,
+          action: "LOGOUT",
+          module: "AUTH",
+          targetType: "USER",
+          targetId: userId,
+          description: "User logged out",
+          request: req,
         });
       }
 
-      // Destroy session
+      // 2. xoá refresh token trong Session (destroy session)
       req.session.destroy((err) => {
         if (err) {
           return res.status(500).json({ error: "Could not logout" });
         }
 
+        // 3. xoá cookie
+        res.clearCookie("refreshToken");
+        res.clearCookie("token"); // just in case it was set from register
         res.clearCookie("connect.sid");
+        
         res.status(200).json({ message: "Logged out successfully" });
       });
     } catch (error: any) {
@@ -182,17 +225,14 @@ export class AuthController {
       const data = UpdateProfileSchema.parse(req.body);
       const user = await AuthService.updateProfile(userId, data);
 
-      // Log audit
-      await prisma.auditLog.create({
-        data: {
-          actorUserId: userId,
-          actionType: "UPDATE_PROFILE",
-          targetTable: "users",
-          targetId: userId,
-          actionStatus: "SUCCESS",
-          ipAddress: req.ip,
-          description: "User updated profile",
-        },
+      await logAudit({
+        actorId: userId,
+        action: "UPDATE_PROFILE",
+        module: "AUTH",
+        targetType: "USER",
+        targetId: userId,
+        description: "User updated profile",
+        request: req,
       });
 
       res.status(200).json({
@@ -233,17 +273,14 @@ export class AuthController {
       const data = ChangePasswordSchema.parse(req.body);
       await AuthService.changePassword(userId, data);
 
-      // Log audit
-      await prisma.auditLog.create({
-        data: {
-          actorUserId: userId,
-          actionType: "CHANGE_PASSWORD",
-          targetTable: "users",
-          targetId: userId,
-          actionStatus: "SUCCESS",
-          ipAddress: req.ip,
-          description: "User changed password",
-        },
+      await logAudit({
+        actorId: userId,
+        action: "CHANGE_PASSWORD",
+        module: "AUTH",
+        targetType: "USER",
+        targetId: userId,
+        description: "User changed password",
+        request: req,
       });
 
       res.status(200).json({ message: "Password changed successfully" });
@@ -255,17 +292,15 @@ export class AuthController {
         });
       }
 
-      // Log failed attempt
-      await prisma.auditLog.create({
-        data: {
-          actorUserId: (req.session as any).userId,
-          actionType: "CHANGE_PASSWORD",
-          targetTable: "users",
-          targetId: (req.session as any).userId,
-          actionStatus: "FAILED",
-          ipAddress: req.ip,
-          description: `Change password failed: ${error.message}`,
-        },
+      await logAudit({
+        actorId: (req.session as any).userId,
+        action: "CHANGE_PASSWORD",
+        module: "AUTH",
+        targetType: "USER",
+        targetId: (req.session as any).userId,
+        description: `Change password failed: ${error.message}`,
+        request: req,
+        status: "FAILED",
       });
 
       res.status(400).json({ error: error.message });

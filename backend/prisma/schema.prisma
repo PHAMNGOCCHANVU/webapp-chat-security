@@ -18,7 +18,7 @@ model User {
   displayName  String @map("display_name")
   avatarUrl    String? @map("avatar_url")
   status       String @default("ACTIVE")
-  // status: ACTIVE | LOCKED | BANNED
+  // status: ACTIVE | LOCKED | DISABLED | DELETED
 
   userRoles          UserRole[]
   createdMessages    Message[]
@@ -30,6 +30,9 @@ model User {
   friendships2       Friendship[] @relation("user2")
   conversationMembers ConversationMember[] @relation("conversationMembers")
   createdConversations Conversation[] @relation("createdBy")
+
+  bio          String? @db.NVarChar(500)
+  phone        String? @db.NVarChar(20)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -100,6 +103,7 @@ model FriendRequest {
   id         String @id @default(uuid())
   senderId   String @map("sender_id")
   receiverId String @map("receiver_id")
+  message    String? @db.NVarChar(500)
   status     String @default("PENDING")
   // status: PENDING | ACCEPTED | REJECTED
 
@@ -109,6 +113,9 @@ model FriendRequest {
   createdAt  DateTime @default(now()) @map("created_at")
   respondedAt DateTime? @map("responded_at")
 
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
   @@map("friend_requests")
 }
 
@@ -124,7 +131,11 @@ model Friendship {
   user2    User @relation("user2", fields: [user2Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
   @@map("friendships")
 }
 
@@ -136,15 +147,24 @@ model Conversation {
   conversationType String @map("conversation_type")
   // conversationType: PRIVATE | GROUP
   conversationName String? @map("conversation_name")
+  status           String @default("ACTIVE")
+  // status: ACTIVE | ARCHIVED | DELETED
   createdBy        String @map("created_by")
+  directMessageKey String? @unique @map("direct_message_key")
+  lastMessageId    String? @map("last_message_id")
+  lastMessageAt    DateTime? @map("last_message_at")
 
   creator              User @relation("createdBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   members              ConversationMember[]
-  messages             Message[]
+  messages             Message[] @relation("ConversationMessages")
+  lastMessage          Message? @relation("ConversationLastMessage", fields: [lastMessageId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([conversationType, updatedAt])
+  @@index([createdBy])
+  @@index([lastMessageAt])
   @@map("conversations")
 }
 
@@ -156,6 +176,8 @@ model ConversationMember {
   userId         String @map("user_id")
   memberRole     String @default("MEMBER") @map("member_role")
   // memberRole: OWNER | MEMBER
+  lastReadAt     DateTime? @map("last_read_at")
+  unreadCount    Int @default(0) @map("unread_count")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   user         User @relation("conversationMembers", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -163,6 +185,7 @@ model ConversationMember {
   joinedAt DateTime @default(now()) @map("joined_at")
 
   @@id([conversationId, userId])
+  @@index([userId, joinedAt])
   @@map("conversation_members")
 }
 
@@ -173,15 +196,18 @@ model Message {
   id              String @id @default(uuid())
   conversationId  String @map("conversation_id")
   senderId        String @map("sender_id")
-  messageContent  String @map("message_content") @db.NVarChar(Max)
+  messageContent  String? @map("message_content") @db.NVarChar(Max)
+  imageUrl        String? @map("image_url")
   isDeleted       Boolean @default(false) @map("is_deleted")
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: NoAction)
+  conversation Conversation @relation("ConversationMessages", fields: [conversationId], references: [id], onDelete: NoAction)
   sender       User @relation(fields: [senderId], references: [id], onDelete: NoAction)
+  lastMessageFor Conversation[] @relation("ConversationLastMessage")
 
   createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime? @map("updated_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([conversationId, createdAt])
   @@map("messages")
 }
 
@@ -192,11 +218,13 @@ model AuditLog {
   id           String @id @default(uuid())
   actorUserId  String? @map("actor_user_id")
   actionType   String @map("action_type")
+  moduleName   String? @map("module_name")
   targetTable  String? @map("target_table")
   targetId     String? @map("target_id")
   actionStatus String @map("action_status")
   // actionStatus: SUCCESS | FAILED
   ipAddress    String? @map("ip_address")
+  userAgent    String? @map("user_agent") @db.NVarChar(1000)
   description  String? @map("description") @db.NVarChar(Max)
 
   actor User? @relation(fields: [actorUserId], references: [id])

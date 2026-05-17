@@ -1,0 +1,23 @@
+BEGIN TRY
+
+BEGIN TRAN;
+
+IF COL_LENGTH('dbo.conversations', 'status') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[conversations]
+    ADD [status] NVARCHAR(1000) NOT NULL
+        CONSTRAINT [conversations_status_df] DEFAULT 'ACTIVE';
+END;
+
+COMMIT TRAN;
+
+END TRY
+BEGIN CATCH
+
+IF @@TRANCOUNT > 0
+BEGIN
+    ROLLBACK TRAN;
+END;
+THROW
+
+END CATCH

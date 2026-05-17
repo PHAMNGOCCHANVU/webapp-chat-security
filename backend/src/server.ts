@@ -7,19 +7,22 @@ import { setupSocketHandlers } from "./sockets/chat.handler";
 import { sessionConfig } from "./config/session";
 
 const PORT = Number(env.PORT);
+const allowedOrigins = [
+  "http://127.0.0.1:4173",
+  "http://localhost:4173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5173",
+  "http://127.0.0.1:5500",
+  "http://127.0.0.1:5501",
+  "http://localhost:5500",
+  "http://localhost:5501",
+];
 
 const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: [
-      "http://127.0.0.1:5500",
-      "http://127.0.0.1:5501",
-      "http://localhost:5500",
-      "http://localhost:5501",
-      "http://localhost:5173",
-      "http://127.0.0.1:5173"
-    ],
+    origin: allowedOrigins,
     credentials: true,
   },
 });

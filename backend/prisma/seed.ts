@@ -1,117 +1,64 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
+import { ensureSystemRbacCatalog, ensureUserHasRole } from "../src/services/rbac-catalog.service";
+import { hashPassword } from "../src/utils/password";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding database...');
+  console.log("Seeding RBAC catalog...");
+  await ensureSystemRbacCatalog(prisma);
+  console.log("RBAC catalog seeded successfully.");
 
-  // Create Roles
-  const userRole = await prisma.role.upsert({
-    where: { roleName: 'USER' },
-    update: {},
+  console.log("Seeding default users...");
+
+  // Seed Admin user
+  const adminPasswordHash = await hashPassword("Admin@123");
+  const adminUser = await prisma.user.upsert({
+    where: { username: "Admin" },
+    update: {
+      passwordHash: adminPasswordHash,
+      displayName: "Administrator",
+      email: "admin@zalegram.local",
+      status: "ACTIVE",
+    },
     create: {
-      roleName: 'USER',
-      description: 'Normal user with chat and group management permissions',
+      username: "Admin",
+      email: "admin@zalegram.local",
+      displayName: "Administrator",
+      passwordHash: adminPasswordHash,
+      status: "ACTIVE",
     },
   });
+  await ensureUserHasRole(prisma, adminUser.id, "ADMIN");
+  console.log(`Admin user seeded: Username = ${adminUser.username}, Password = Admin@123`);
 
-  const adminRole = await prisma.role.upsert({
-    where: { roleName: 'ADMIN' },
-    update: {},
+  // Seed user_demo user
+  const demoPasswordHash = await hashPassword("User@123");
+  const demoUser = await prisma.user.upsert({
+    where: { username: "user_demo" },
+    update: {
+      passwordHash: demoPasswordHash,
+      displayName: "Người dùng demo",
+      email: "user.demo@zalegram.local",
+      status: "ACTIVE",
+    },
     create: {
-      roleName: 'ADMIN',
-      description: 'System administrator with full access',
+      username: "user_demo",
+      email: "user.demo@zalegram.local",
+      displayName: "Người dùng demo",
+      passwordHash: demoPasswordHash,
+      status: "ACTIVE",
     },
   });
+  await ensureUserHasRole(prisma, demoUser.id, "USER");
+  console.log(`Demo user seeded: Username = ${demoUser.username}, Password = User@123`);
 
-  console.log(`✓ Roles created: ${userRole.roleName}, ${adminRole.roleName}`);
-
-  // Create Permissions
-  const permissions = await Promise.all([
-    prisma.permission.upsert({
-      where: { permissionName: 'SEND_MESSAGE' },
-      update: {},
-      create: {
-        permissionName: 'SEND_MESSAGE',
-        description: 'Send messages in conversations',
-      },
-    }),
-    prisma.permission.upsert({
-      where: { permissionName: 'CREATE_GROUP' },
-      update: {},
-      create: {
-        permissionName: 'CREATE_GROUP',
-        description: 'Create group conversations',
-      },
-    }),
-    prisma.permission.upsert({
-      where: { permissionName: 'MANAGE_USERS' },
-      update: {},
-      create: {
-        permissionName: 'MANAGE_USERS',
-        description: 'Manage user accounts and permissions',
-      },
-    }),
-    prisma.permission.upsert({
-      where: { permissionName: 'VIEW_AUDIT_LOGS' },
-      update: {},
-      create: {
-        permissionName: 'VIEW_AUDIT_LOGS',
-        description: 'View system audit logs',
-      },
-    }),
-  ]);
-
-  console.log(`✓ Permissions created: ${permissions.map((p) => p.permissionName).join(', ')}`);
-
-  // Assign permissions to USER role
-  const userPermissions = permissions.filter((p) =>
-    ['SEND_MESSAGE', 'CREATE_GROUP'].includes(p.permissionName)
-  );
-
-  for (const perm of userPermissions) {
-    await prisma.rolePermission.upsert({
-      where: {
-        roleId_permissionId: {
-          roleId: userRole.id,
-          permissionId: perm.id,
-        },
-      },
-      update: {},
-      create: {
-        roleId: userRole.id,
-        permissionId: perm.id,
-      },
-    });
-  }
-
-  console.log(`✓ USER role assigned permissions: SEND_MESSAGE, CREATE_GROUP`);
-
-  // Assign all permissions to ADMIN role
-  for (const perm of permissions) {
-    await prisma.rolePermission.upsert({
-      where: {
-        roleId_permissionId: {
-          roleId: adminRole.id,
-          permissionId: perm.id,
-        },
-      },
-      update: {},
-      create: {
-        roleId: adminRole.id,
-        permissionId: perm.id,
-      },
-    });
-  }
-
-  console.log(`✓ ADMIN role assigned all permissions`);
-
-  console.log('✅ Database seeding completed!');
+  console.log("All default users seeded successfully.");
 }
 
 main()
-  .catch((e) => {
-    console.error('❌ Seeding error:', e);
+  .catch((error) => {
+    console.error("Seed error:", error);
     process.exit(1);
   })
   .finally(async () => {

@@ -1,6 +1,10 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { hashPassword, verifyPassword } from "../utils/password";
 import { RegisterInput, LoginInput, UpdateProfileInput, ChangePasswordInput } from "./validators";
+import { ensureSystemRbacCatalog } from "./rbac-catalog.service";
+
+const normalizeStatus = (status: string) => (status === "BANNED" ? "DISABLED" : status);
 
 /**
  * Auth Service - Handle authentication logic
@@ -11,6 +15,8 @@ export class AuthService {
    * @param input Register input data
    */
   static async register(input: RegisterInput) {
+    await ensureSystemRbacCatalog(prisma);
+
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
       where: {
@@ -32,15 +38,44 @@ export class AuthService {
     const passwordHash = await hashPassword(input.password);
 
     // Create user
-    const user = await prisma.user.create({
-      data: {
-        email: input.email,
-        username: input.username,
-        displayName: input.displayName,
-        passwordHash,
-        status: "ACTIVE",
-      },
-    });
+    let user;
+
+    try {
+      user = await prisma.user.create({
+        data: {
+          email: input.email,
+          username: input.username,
+          displayName: input.displayName,
+          passwordHash,
+          status: "ACTIVE",
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        const target = Array.isArray(error.meta?.target)
+          ? error.meta.target.join(", ")
+          : String(error.meta?.target ?? "");
+
+        if (target.includes("email")) {
+          throw new Error("Email already registered");
+        }
+
+        if (target.includes("username")) {
+          throw new Error("Username already taken");
+        }
+
+        if (target.includes("phone")) {
+          throw new Error("Phone number already in use");
+        }
+
+        throw new Error("A user with the same unique information already exists");
+      }
+
+      throw error;
+    }
 
     // Assign USER role
     const userRole = await prisma.role.findUnique({
@@ -89,8 +124,12 @@ export class AuthService {
       throw new Error("Account is locked");
     }
 
-    if (user.status === "BANNED") {
-      throw new Error("Account is banned");
+    if (user.status === "DISABLED" || user.status === "BANNED") {
+      throw new Error("Account is disabled");
+    }
+
+    if (user.status === "DELETED") {
+      throw new Error("Account has been deleted");
     }
 
     // Verify password
@@ -149,7 +188,7 @@ export class AuthService {
       username: user.username,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
-      status: user.status,
+      status: normalizeStatus(user.status),
       roles: [...new Set(roles)],
       permissions: [...new Set(permissions)],
       createdAt: user.createdAt,

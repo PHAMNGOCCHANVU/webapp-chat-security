@@ -86,6 +86,19 @@ export async function setupSocketHandlers(io: Server) {
           return;
         }
 
+        const conversationState = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { status: true },
+        });
+
+        if (!conversationState || conversationState.status === "DELETED") {
+          socket.emit("error", {
+            message: "Conversation is no longer available",
+            code: "GONE"
+          });
+          return;
+        }
+
         // Join socket.io room
         socket.join(conversationId);
         console.log(`👤 User ${username} joined conversation ${conversationId}`);
@@ -190,13 +203,20 @@ export async function setupSocketHandlers(io: Server) {
      * Event: send-message
      * Send message to room
      */
-    socket.on("send-message", async (data: { conversationId: string; content: string }, callback?) => {
+    socket.on(
+      "send-message",
+      async (
+        data: { conversationId: string; content?: string; imageUrl?: string },
+        callback?
+      ) => {
       try {
-        const { conversationId, content } = data;
+        const { conversationId, content, imageUrl } = data;
+        const trimmedContent = content?.trim() || "";
+        const trimmedImageUrl = imageUrl?.trim() || "";
 
-        if (!content || content.trim().length === 0) {
+        if (!trimmedContent && !trimmedImageUrl) {
           socket.emit("error", { 
-            message: "Message cannot be empty",
+            message: "Message must contain text or an image",
             code: "INVALID_INPUT"
           });
           return;
@@ -220,11 +240,33 @@ export async function setupSocketHandlers(io: Server) {
           return;
         }
 
+        const conversationState = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { status: true },
+        });
+
+        if (!conversationState || conversationState.status === "DELETED") {
+          socket.emit("error", {
+            message: "Conversation is no longer available",
+            code: "GONE"
+          });
+          return;
+        }
+
+        if (conversationState.status !== "ACTIVE") {
+          socket.emit("error", {
+            message: "This conversation is not accepting new messages",
+            code: "FORBIDDEN"
+          });
+          return;
+        }
+
         // Create message
         const message = await prisma.message.create({
           data: {
             conversationId,
-            messageContent: content.trim(),
+            messageContent: trimmedContent || null,
+            imageUrl: trimmedImageUrl || null,
             senderId: userId,
           },
           include: {
@@ -249,6 +291,7 @@ export async function setupSocketHandlers(io: Server) {
           id: message.id,
           conversationId,
           content: message.messageContent,
+          imageUrl: message.imageUrl,
           sender: message.sender,
           createdAt: message.createdAt,
           updatedAt: message.updatedAt
@@ -309,6 +352,19 @@ export async function setupSocketHandlers(io: Server) {
           socket.emit("error", { 
             message: "Not a member of this conversation",
             code: "FORBIDDEN"
+          });
+          return;
+        }
+
+        const conversationState = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { status: true },
+        });
+
+        if (!conversationState || conversationState.status === "DELETED") {
+          socket.emit("error", {
+            message: "Conversation is no longer available",
+            code: "GONE"
           });
           return;
         }

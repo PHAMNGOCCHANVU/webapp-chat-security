@@ -20,11 +20,12 @@ export class RoomController {
 
       await logAudit({
         actorId: req.session.userId!,
-        action: "CREATE_CONVERSATION",
-        targetType: "Conversation",
+        action: "CREATE_GROUP",
+        module: "CONVERSATION",
+        targetType: "GROUP",
         targetId: room.id,
         description: `Created conversation: ${room.conversationName || room.id}`,
-        ipAddress: req.ip,
+        request: req,
       });
 
       res.status(201).json(room);
@@ -66,10 +67,11 @@ export class RoomController {
       await logAudit({
         actorId: req.session.userId!,
         action: "ADD_MEMBER",
-        targetType: "ConversationMember",
+        module: "MEMBER",
+        targetType: "GROUP",
         targetId: req.params.id,
         description: `Added member ${data.userId} to conversation`,
-        ipAddress: req.ip,
+        request: req,
       });
 
       res.status(201).json(member);
@@ -87,10 +89,11 @@ export class RoomController {
       await logAudit({
         actorId: req.session.userId!,
         action: "REMOVE_MEMBER",
-        targetType: "Conversation",
+        module: "MEMBER",
+        targetType: "GROUP",
         targetId: req.params.id,
         description: `Removed member ${req.params.userId} from conversation`,
-        ipAddress: req.ip,
+        request: req,
       });
 
       res.status(200).json({ message: "Member removed successfully" });
