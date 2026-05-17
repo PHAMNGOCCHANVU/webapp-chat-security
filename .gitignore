@@ -9,6 +9,9 @@ coverage/
 .env
 .env.*
 !.env.example
+backend/.env
+frontend/.env
+backend/.env.example
 
 # Logs
 *.log
