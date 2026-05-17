@@ -60,7 +60,7 @@ export class AuthController {
       const data = LoginSchema.parse(req.body);
       const user = await AuthService.login(data);
 
-      // Set session
+      // Set session — save() để đảm bảo PrismaSessionStore commit vào DB ngay
       (req.session as any).userId = user.id;
       (req.session as any).username = user.username;
 
@@ -74,9 +74,14 @@ export class AuthController {
         status: "SUCCESS",
       });
 
-      res.status(200).json({
-        message: "Login successful",
-        user,
+      req.session.save((err) => {
+        if (err) {
+          return res.status(500).json({ error: "Session save failed" });
+        }
+        res.status(200).json({
+          message: "Login successful",
+          user,
+        });
       });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
