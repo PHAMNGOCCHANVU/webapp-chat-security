@@ -2,10 +2,12 @@ import { Router } from "express";
 import { AdminController } from "../controllers/admin.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { requireRole } from "../middlewares/role.middleware";
+import { adminLimiter } from "../config/rate-limit";
 
 const router = Router();
 
-// Apply authentication and admin role check to all routes
+// Apply rate limit, authentication and admin role check to all routes
+router.use(adminLimiter);
 router.use(requireAuth);
 router.use(requireRole("ADMIN"));
 

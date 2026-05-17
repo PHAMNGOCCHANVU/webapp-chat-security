@@ -3,6 +3,7 @@ import { Server } from "socket.io";
 import session from "express-session";
 import app from "./app";
 import { env } from "./config/env";
+import { allowedOrigins } from "./config/cors";
 import { setupSocketHandlers } from "./sockets/chat.handler";
 import { sessionConfig } from "./config/session";
 
@@ -12,14 +13,7 @@ const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: [
-      "http://127.0.0.1:5500",
-      "http://127.0.0.1:5501",
-      "http://localhost:5500",
-      "http://localhost:5501",
-      "http://localhost:5173",
-      "http://127.0.0.1:5173"
-    ],
+    origin: allowedOrigins, // Load từ env qua config/cors.ts
     credentials: true,
   },
 });

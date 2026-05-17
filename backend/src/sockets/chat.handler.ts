@@ -1,6 +1,14 @@
 import { Server, Socket } from "socket.io";
 import { prisma } from "../config/prisma";
 import { logAudit, AuditAction } from "../services/audit.service";
+import { SocketRateLimiter } from "../utils/socket-rate-limiter";
+import { MessageContentSchema } from "../services/validators";
+
+// Rate limiter cho Socket.IO send-message: 10 tin nhắn / phút / user
+const messageLimiter = new SocketRateLimiter();
+
+// Cleanup định kỳ mỗi 5 phút để tránh memory leak
+setInterval(() => messageLimiter.cleanup(), 5 * 60 * 1000);
 
 interface UserSession {
   userId: string;
@@ -188,39 +196,61 @@ export async function setupSocketHandlers(io: Server) {
 
     /**
      * Event: send-message
-     * Send message to room
+     * Send message to room — with rate limiting + input sanitization
      */
     socket.on("send-message", async (data: { conversationId: string; content: string }, callback?) => {
       try {
-        const { conversationId, content } = data;
-
-        if (!content || content.trim().length === 0) {
-          socket.emit("error", { 
-            message: "Message cannot be empty",
-            code: "INVALID_INPUT"
+        // ── Rate limit: 10 tin nhắn / phút / user ────────────────────────
+        if (!messageLimiter.isAllowed(userId)) {
+          socket.emit("error", {
+            message: "Rate limit exceeded: maximum 10 messages per minute",
+            code: "RATE_LIMIT_EXCEEDED",
+            remaining: 0,
           });
           return;
         }
 
-        // Verify user is member
+        // ── Validate + Sanitize input (Zod) ──────────────────────────────
+        const parsed = MessageContentSchema.safeParse(data);
+        if (!parsed.success) {
+          socket.emit("error", {
+            message: "Invalid message data",
+            code: "INVALID_INPUT",
+            details: parsed.error.errors,
+          });
+          return;
+        }
+
+        const { conversationId, content } = parsed.data;
+
+        // Sau khi sanitize, nội dung không được rỗng
+        if (!content || content.trim().length === 0) {
+          socket.emit("error", {
+            message: "Message content is empty after sanitization",
+            code: "INVALID_INPUT",
+          });
+          return;
+        }
+
+        // ── Verify user is member ─────────────────────────────────────────
         const member = await prisma.conversationMember.findUnique({
           where: {
             conversationId_userId: {
               conversationId,
-              userId
-            }
-          }
+              userId,
+            },
+          },
         });
 
         if (!member) {
-          socket.emit("error", { 
+          socket.emit("error", {
             message: "Not a member of this conversation",
-            code: "FORBIDDEN"
+            code: "FORBIDDEN",
           });
           return;
         }
 
-        // Create message
+        // ── Create message (dùng sanitized content) ───────────────────────
         const message = await prisma.message.create({
           data: {
             conversationId,
@@ -228,41 +258,45 @@ export async function setupSocketHandlers(io: Server) {
             senderId: userId,
           },
           include: {
-            sender: { select: { id: true, username: true, displayName: true } }
-          }
+            sender: { select: { id: true, username: true, displayName: true } },
+          },
         });
 
         console.log(`💬 Message sent in ${conversationId} by ${username}`);
 
-        // Audit log
+        // ── Audit log ─────────────────────────────────────────────────────
         await logAudit({
           actorId: userId,
           action: AuditAction.SEND_MESSAGE,
           targetType: "Message",
           targetId: message.id,
           description: `Sent message in conversation ${conversationId}`,
-          status: "SUCCESS"
+          status: "SUCCESS",
         });
 
-        // Broadcast message to room
+        // ── Broadcast to room ─────────────────────────────────────────────
         io.to(conversationId).emit("new-message", {
           id: message.id,
           conversationId,
           content: message.messageContent,
           sender: message.sender,
           createdAt: message.createdAt,
-          updatedAt: message.updatedAt
+          updatedAt: message.updatedAt,
         });
 
         if (callback) {
-          callback({ success: true, messageId: message.id });
+          callback({
+            success: true,
+            messageId: message.id,
+            remaining: messageLimiter.getRemainingCount(userId),
+          });
         }
       } catch (err: any) {
         console.error("Failed to send message:", err);
-        socket.emit("error", { 
+        socket.emit("error", {
           message: "Failed to send message",
           code: "ERROR",
-          details: err.message
+          details: err.message,
         });
       }
     });

@@ -1,28 +1,13 @@
 import { Router } from "express";
 import { AuthController } from "../controllers/auth.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
-import rateLimit from "express-rate-limit";
+import {
+  registerLimiter,
+  loginLimiter,
+  changePasswordLimiter,
+} from "../config/rate-limit";
 
 const router = Router();
-
-/**
- * Rate limiting for auth endpoints
- */
-const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // max 3 registrations per hour per IP
-  message: "Too many registration attempts, please try again later",
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // max 5 login attempts per 15 minutes per IP
-  message: "Too many login attempts, please try again later",
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 /**
  * Public routes (no authentication required)
@@ -217,6 +202,6 @@ router.put("/profile", requireAuth, AuthController.updateProfile);
  *       401:
  *         description: Chưa đăng nhập
  */
-router.post("/change-password", requireAuth, AuthController.changePassword);
+router.post("/change-password", requireAuth, changePasswordLimiter, AuthController.changePassword);
 
 export default router;
