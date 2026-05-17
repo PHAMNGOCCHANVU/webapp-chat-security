@@ -13,14 +13,11 @@ export const addMemberSchema = z.object({
 
 export class RoomService {
   static async listRooms(userId: string) {
-    // Return all public group conversations + private conversations where user is a member
+    // Only return conversations where user is an actual member
     return prisma.conversation.findMany({
       where: {
         status: { not: "DELETED" },
-        OR: [
-          { conversationType: "GROUP" },
-          { members: { some: { userId } } }
-        ]
+        members: { some: { userId } }
       },
       include: {
         creator: { select: { id: true, username: true, displayName: true } },

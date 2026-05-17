@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { AdminService } from "../services/admin.service";
-import { logAudit } from "../services/audit.service";
+import { logAudit, AuditAction } from "../services/audit.service";
 
 const userStatusSchema = z.enum(["ACTIVE", "LOCKED", "DISABLED", "DELETED"]);
 const conversationStatusSchema = z.enum(["ACTIVE", "ARCHIVED", "DELETED"]);
@@ -225,12 +225,14 @@ export class AdminController {
 
       await logAudit({
         actorId: req.session.userId!,
-        action: getUserStatusAuditAction(status, user.previousStatus),
+        action: AuditAction.UPDATE_USER_STATUS,
         module: "USER",
         targetType: "USER",
         targetId: id,
         description: `Changed user status from ${user.previousStatus} to ${status}`,
         request: req,
+        metadata: { previousStatus: user.previousStatus, newStatus: status },
+        status: "SUCCESS",
       });
 
       res.json(user);
@@ -261,12 +263,14 @@ export class AdminController {
 
       await logAudit({
         actorId: req.session.userId!,
-        action: "ASSIGN_ROLE",
+        action: AuditAction.UPDATE_USER_ROLE,
         module: "ROLE",
         targetType: "USER",
         targetId: id,
         description: `Assigned role ${role} to ${user.username}`,
         request: req,
+        metadata: { newRole: role },
+        status: "SUCCESS",
       });
 
       res.json(user);
@@ -546,66 +550,42 @@ export class AdminController {
 
   static async getAuditLogs(req: Request, res: Response) {
     try {
-      const { action, actor, actorId, module, status, dateFrom, dateTo, from, to, page, limit } = req.query;
-      const filters: {
-        action?: string;
-        actor?: string;
-        actorId?: string;
-        module?: string;
-        status?: string;
-        dateFrom?: string;
-        dateTo?: string;
-        page?: number;
-        limit?: number;
-      } = {};
+      const querySchema = z.object({
+        action: z.string().optional(),
+        actor: z.string().optional(),
+        actorId: z.string().optional(),
+        module: z.string().optional(),
+        targetType: z.string().optional(),
+        status: z.string().optional(),
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+        page: z.string().optional().transform((val) => val ? parseInt(val, 10) : 1),
+        limit: z.string().optional().transform((val) => val ? parseInt(val, 10) : 50),
+        search: z.string().optional(),
+      });
 
-      if (typeof action === "string" && action.trim()) {
-        filters.action = action;
-      }
+      const parsed = querySchema.parse(req.query);
 
-      if (typeof actor === "string" && actor.trim()) {
-        filters.actor = actor;
-      }
+      const logs = await AdminService.getAuditLogs({
+        action: parsed.action,
+        actor: parsed.actor,
+        actorId: parsed.actorId,
+        module: parsed.module || parsed.targetType,
+        status: parsed.status,
+        dateFrom: parsed.dateFrom || parsed.from || parsed.startDate,
+        dateTo: parsed.dateTo || parsed.to || parsed.endDate,
+        page: parsed.page,
+        limit: parsed.limit,
+        search: parsed.search,
+      });
 
-      if (typeof actorId === "string" && actorId.trim()) {
-        filters.actorId = actorId;
-      }
-
-      if (typeof module === "string" && module.trim()) {
-        filters.module = module;
-      }
-
-      if (typeof status === "string" && status.trim()) {
-        filters.status = status;
-      }
-
-      if (typeof dateFrom === "string" && dateFrom.trim()) {
-        filters.dateFrom = dateFrom;
-      }
-
-      if (!filters.dateFrom && typeof from === "string" && from.trim()) {
-        filters.dateFrom = from;
-      }
-
-      if (typeof dateTo === "string" && dateTo.trim()) {
-        filters.dateTo = dateTo;
-      }
-
-      if (!filters.dateTo && typeof to === "string" && to.trim()) {
-        filters.dateTo = to;
-      }
-
-      if (typeof page === "string" && Number.isFinite(Number(page))) {
-        filters.page = Math.max(1, Number(page));
-      }
-
-      if (typeof limit === "string" && Number.isFinite(Number(limit))) {
-        filters.limit = Math.min(100, Math.max(1, Number(limit)));
-      }
-
-      const logs = await AdminService.getAuditLogs(filters);
       res.json(logs);
     } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
       res.status(500).json({ error: err.message });
     }
   }
@@ -633,12 +613,14 @@ export class AdminController {
 
       await logAudit({
         actorId: req.session.userId!,
-        action: "DELETE_USER",
+        action: AuditAction.DELETE_USER,
         module: "USER",
         targetType: "USER",
         targetId: id,
-        description: `Soft deleted user ${user.username}`,
+        description: `Deleted user: ${user.username} (${user.email})`,
         request: req,
+        metadata: { deletedUsername: user.username },
+        status: "SUCCESS",
       });
 
       res.json({ message: "User soft-deleted successfully", user });

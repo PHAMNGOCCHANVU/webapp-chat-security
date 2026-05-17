@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthService } from "../services/auth.service";
-import { logAudit } from "../services/audit.service";
+import { logAudit, AuditAction } from "../services/audit.service";
 
 const normalizePermissionNames = (permissionNames: string | string[]) =>
   Array.isArray(permissionNames) ? permissionNames : [permissionNames];
 
 /**
  * Middleware to require specific role
+ * Ghi audit log khi bị từ chối vì không đủ quyền (403)
  * Usage: router.get("/admin", requireRole("ADMIN"), handler)
  */
 export function requireRole(roleName: string) {
@@ -16,7 +17,7 @@ export function requireRole(roleName: string) {
 
       if (!session?.userId) {
         await logAudit({
-          action: "ACCESS_DENIED",
+          action: AuditAction.ACCESS_DENIED,
           module: "AUTH",
           targetType: "ADMIN",
           description: `Denied access to ${req.originalUrl}: missing session`,
@@ -35,7 +36,7 @@ export function requireRole(roleName: string) {
       if (!hasRole) {
         await logAudit({
           actorId: session.userId,
-          action: "ACCESS_DENIED",
+          action: AuditAction.ACCESS_DENIED,
           module: "ROLE",
           targetType: "ADMIN",
           description: `Denied access to ${req.originalUrl}: missing ${roleName} role`,
@@ -71,7 +72,7 @@ export function requirePermission(permissionNames: string | string[]) {
 
       if (!session?.userId) {
         await logAudit({
-          action: "ACCESS_DENIED",
+          action: AuditAction.ACCESS_DENIED,
           module: "AUTH",
           targetType: "ADMIN",
           description: `Denied access to ${req.originalUrl}: missing session`,
@@ -98,7 +99,7 @@ export function requirePermission(permissionNames: string | string[]) {
 
       await logAudit({
         actorId: session.userId,
-        action: "ACCESS_DENIED",
+        action: AuditAction.ACCESS_DENIED,
         module: "ROLE",
         targetType: "ADMIN",
         description: `Denied access to ${req.originalUrl}: missing required permission (${normalizedPermissionNames.join(", ")})`,
@@ -116,4 +117,3 @@ export function requirePermission(permissionNames: string | string[]) {
     }
   };
 }
-

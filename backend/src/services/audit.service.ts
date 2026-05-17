@@ -1,5 +1,6 @@
 import type { Request } from "express";
 import { prisma } from "../config/prisma";
+import { AuditAction } from "../utils/audit-actions";
 
 export type AuditActionStatus = "SUCCESS" | "FAILED";
 
@@ -110,36 +111,49 @@ export const getAuditRequestContext = (request?: AuditContextRequest) => ({
   ),
 });
 
-export async function logAudit(params: {
+export { AuditAction };
+
+export interface AuditLogParams {
   actorId?: string;
-  action: string;
+  action: AuditAction | string;
   module?: string;
   targetType?: string;
   targetId?: string;
   description?: string;
-  metadata?: unknown;
+  metadata?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
   request?: AuditContextRequest;
   status?: AuditActionStatus;
-}) {
+}
+
+export async function logAudit(params: AuditLogParams): Promise<void> {
   try {
     const requestContext = getAuditRequestContext(params.request);
+    let description = params.description;
+
+    // Nếu có metadata, gắn vào cuối description dạng JSON
+    if (params.metadata && Object.keys(params.metadata).length > 0) {
+      const metaStr = JSON.stringify(params.metadata);
+      description = description
+        ? `${description} | metadata: ${metaStr}`
+        : `metadata: ${metaStr}`;
+    }
 
     await prisma.auditLog.create({
       data: {
-        actorUserId: params.actorId,
+        actorUserId: params.actorId ?? null,
         actionType: params.action.trim().toUpperCase(),
         moduleName: resolveAuditModuleName(params.action, params.targetType, params.module),
         targetTable: normalizeAuditString(params.targetType)?.toUpperCase() ?? null,
         targetId: normalizeAuditString(params.targetId) ?? null,
-        description: normalizeAuditString(params.description) ?? null,
+        description: normalizeAuditString(description) ?? null,
         ipAddress: normalizeAuditString(params.ipAddress) ?? requestContext.ipAddress ?? null,
         userAgent: normalizeAuditString(params.userAgent) ?? requestContext.userAgent ?? null,
         actionStatus: params.status || "SUCCESS",
       },
     });
   } catch (error) {
-    console.error("Failed to write audit log:", error);
+    console.error("[AuditLog] Failed to write audit log:", error);
   }
 }

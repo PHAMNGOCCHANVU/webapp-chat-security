@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { AuthService } from "../services/auth.service";
 import { RegisterSchema, LoginSchema, UpdateProfileSchema, ChangePasswordSchema } from "../services/validators";
-import { logAudit } from "../services/audit.service";
+import { logAudit, AuditAction } from "../services/audit.service";
 import { z } from "zod";
 import jwt from "jsonwebtoken";
 
@@ -17,15 +17,15 @@ export class AuthController {
     try {
       const data = RegisterSchema.parse(req.body);
       const user = await AuthService.register(data);
-
       await logAudit({
         actorId: user.id,
-        action: "REGISTER",
+        action: AuditAction.REGISTER,
         module: "AUTH",
         targetType: "USER",
         targetId: user.id,
         description: `User registered: ${user.username}`,
         request: req,
+        status: "SUCCESS",
       });
 
       // Generate JWT
@@ -56,7 +56,7 @@ export class AuthController {
       }
 
       await logAudit({
-        action: "REGISTER",
+        action: AuditAction.REGISTER_FAILED,
         module: "AUTH",
         targetType: "USER",
         description: `Registration failed: ${error.message}`,
@@ -101,16 +101,18 @@ export class AuthController {
         }
 
         (req.session as any).userId = user.id;
+        (req.session as any).username = user.username;
         (req.session as any).refreshToken = refreshToken;
 
         await logAudit({
           actorId: user.id,
-          action: "LOGIN_SUCCESS",
+          action: AuditAction.LOGIN,
           module: "AUTH",
           targetType: "USER",
           targetId: user.id,
           description: `User logged in: ${user.username}`,
           request: req,
+          status: "SUCCESS",
         });
 
         // 6. trả refresh token về trong cookie
@@ -120,11 +122,15 @@ export class AuthController {
           maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         });
 
-        // 7. trả access token về trong res
-        res.status(200).json({
-          message: "Login successful",
-          accessToken,
-          user,
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            return res.status(500).json({ error: "Session save failed" });
+          }
+          res.status(200).json({
+            message: "Login successful",
+            accessToken,
+            user,
+          });
         });
       });
     } catch (error: any) {
@@ -136,10 +142,10 @@ export class AuthController {
       }
 
       await logAudit({
-        action: "LOGIN_FAILED",
+        action: AuditAction.LOGIN_FAILED,
         module: "AUTH",
         targetType: "SESSION",
-        description: `Login failed: ${error.message}`,
+        description: `Login failed for input "${req.body?.username ?? "unknown"}": ${error.message}`,
         request: req,
         status: "FAILED",
       });
@@ -154,25 +160,25 @@ export class AuthController {
    */
   static async logout(req: Request, res: Response) {
     const userId = (req.session as any).userId;
+    const username = (req.session as any).username;
 
     try {
       // 1. lấy refresh token từ cookie
-      req.cookies?.refreshToken;
+      const refreshToken = req.cookies?.refreshToken;
 
       // Log audit before destroying session
       if (userId) {
         await logAudit({
           actorId: userId,
-          action: "LOGOUT",
+          action: AuditAction.LOGOUT,
           module: "AUTH",
           targetType: "USER",
           targetId: userId,
-          description: "User logged out",
+          description: `User logged out: ${username ?? userId}`,
           request: req,
+          status: "SUCCESS",
         });
       }
-
-      // 2. xoá refresh token trong Session (destroy session)
       req.session.destroy((err) => {
         if (err) {
           return res.status(500).json({ error: "Could not logout" });
@@ -203,7 +209,6 @@ export class AuthController {
       }
 
       const profile = await AuthService.getUserProfile(userId);
-
       res.status(200).json(profile);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -227,12 +232,16 @@ export class AuthController {
 
       await logAudit({
         actorId: userId,
-        action: "UPDATE_PROFILE",
+        action: AuditAction.UPDATE_PROFILE,
         module: "AUTH",
         targetType: "USER",
         targetId: userId,
         description: "User updated profile",
         request: req,
+        metadata: {
+          updatedFields: Object.keys(data),
+        },
+        status: "SUCCESS",
       });
 
       res.status(200).json({
@@ -263,9 +272,9 @@ export class AuthController {
    * Change user password
    */
   static async changePassword(req: Request, res: Response) {
-    try {
-      const userId = (req.session as any).userId;
+    const userId = (req.session as any).userId;
 
+    try {
       if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -275,12 +284,13 @@ export class AuthController {
 
       await logAudit({
         actorId: userId,
-        action: "CHANGE_PASSWORD",
+        action: AuditAction.CHANGE_PASSWORD,
         module: "AUTH",
         targetType: "USER",
         targetId: userId,
-        description: "User changed password",
+        description: "User changed password successfully",
         request: req,
+        status: "SUCCESS",
       });
 
       res.status(200).json({ message: "Password changed successfully" });
@@ -293,11 +303,11 @@ export class AuthController {
       }
 
       await logAudit({
-        actorId: (req.session as any).userId,
-        action: "CHANGE_PASSWORD",
+        actorId: userId,
+        action: AuditAction.CHANGE_PASSWORD_FAILED,
         module: "AUTH",
         targetType: "USER",
-        targetId: (req.session as any).userId,
+        targetId: userId,
         description: `Change password failed: ${error.message}`,
         request: req,
         status: "FAILED",

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../config/prisma";
-import { logAudit } from "../services/audit.service";
+import { logAudit, AuditAction } from "../services/audit.service";
 
 const normalizeStatus = (status: string) => (status === "BANNED" ? "DISABLED" : status);
 
@@ -16,7 +16,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     if (!token) {
       await logAudit({
         actorId: (req.session as any)?.userId,
-        action: "ACCESS_DENIED",
+        action: AuditAction.ACCESS_DENIED,
         module: "AUTH",
         targetType: "SESSION",
         description: `Denied access to ${req.originalUrl}: missing access token`,
@@ -48,7 +48,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     if (!user) {
       await logAudit({
         actorId: decoded.userId,
-        action: "ACCESS_DENIED",
+        action: AuditAction.ACCESS_DENIED,
         module: "AUTH",
         targetType: "USER",
         targetId: decoded.userId,
@@ -66,7 +66,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     if (["LOCKED", "DISABLED", "DELETED", "BANNED"].includes(user.status)) {
       await logAudit({
         actorId: user.id,
-        action: "ACCESS_DENIED",
+        action: AuditAction.ACCESS_DENIED,
         module: "AUTH",
         targetType: "USER",
         targetId: user.id,
@@ -97,7 +97,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     if (error.name === "TokenExpiredError") {
       await logAudit({
         actorId: (req.session as any)?.userId,
-        action: "ACCESS_DENIED",
+        action: AuditAction.ACCESS_DENIED,
         module: "AUTH",
         targetType: "SESSION",
         description: `Denied access to ${req.originalUrl}: access token expired`,
@@ -113,7 +113,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 
     await logAudit({
       actorId: (req.session as any)?.userId,
-      action: "ACCESS_DENIED",
+      action: AuditAction.ACCESS_DENIED,
       module: "AUTH",
       targetType: "SESSION",
       description: `Denied access to ${req.originalUrl}: invalid access token`,

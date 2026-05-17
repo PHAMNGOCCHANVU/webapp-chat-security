@@ -1073,21 +1073,34 @@ export class AdminService {
     actorId?: string;
     module?: string;
     status?: string;
-    dateFrom?: string;
-    dateTo?: string;
+    dateFrom?: string | Date;
+    dateTo?: string | Date;
+    startDate?: string | Date;
+    endDate?: string | Date;
+    targetType?: string;
     page?: number;
     limit?: number;
+    search?: string;
   }) {
     const whereConditions: Prisma.AuditLogWhereInput[] = [];
+
     const action = filters?.action?.trim().toUpperCase();
     const actor = filters?.actor?.trim();
     const actorId = filters?.actorId?.trim();
-    const moduleName = filters?.module?.trim().toUpperCase();
+    const moduleName = (filters?.module || filters?.targetType)?.trim().toUpperCase();
     const status = filters?.status?.trim().toUpperCase();
-    const dateFrom = parseAuditDate(filters?.dateFrom);
-    const dateTo = parseAuditDate(filters?.dateTo, true);
+    const search = filters?.search?.trim();
+
+    // Parse dates
+    const dateFromRaw = filters?.dateFrom || filters?.startDate;
+    const dateToRaw = filters?.dateTo || filters?.endDate;
+
+    const dateFrom = typeof dateFromRaw === "string" ? parseAuditDate(dateFromRaw) : dateFromRaw;
+    const dateTo = typeof dateToRaw === "string" ? parseAuditDate(dateToRaw, true) : dateToRaw;
+
     const page = Math.max(1, filters?.page ?? 1);
-    const limit = Math.min(300, Math.max(1, filters?.limit ?? 300));
+    const limit = Math.min(100, Math.max(1, filters?.limit ?? 50));
+    const skip = (page - 1) * limit;
 
     if (action && action !== "ALL") {
       whereConditions.push({ actionType: action });
@@ -1118,6 +1131,12 @@ export class AdminService {
       whereConditions.push({ actionStatus: status });
     }
 
+    if (search) {
+      whereConditions.push({
+        description: { contains: search },
+      });
+    }
+
     if (dateFrom || dateTo) {
       whereConditions.push({
         createdAt: {
@@ -1127,28 +1146,43 @@ export class AdminService {
       });
     }
 
-    const logs = await prisma.auditLog.findMany({
-      where: whereConditions.length ? { AND: whereConditions } : undefined,
-      orderBy: { createdAt: "desc" },
-      include: {
-        actor: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
+    const whereClause = whereConditions.length ? { AND: whereConditions } : undefined;
+
+    const [data, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where: whereClause,
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip,
+        include: {
+          actor: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+            },
           },
         },
-      },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+      }),
+      prisma.auditLog.count({ where: whereClause }),
+    ]);
 
-    return logs.map((log) => ({
+    const mappedData = data.map((log) => ({
       ...log,
       moduleName: log.moduleName || resolveAuditModuleName(log.actionType, log.targetTable),
       userAgent: log.userAgent,
       actionStatus: normalizeAuditStatus(log.actionStatus),
     }));
+
+    return {
+      data: mappedData,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   static async getAuditLog(logId: string) {

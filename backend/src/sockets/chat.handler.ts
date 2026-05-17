@@ -1,6 +1,14 @@
 import { Server, Socket } from "socket.io";
 import { prisma } from "../config/prisma";
-import { logAudit } from "../services/audit.service";
+import { logAudit, AuditAction } from "../services/audit.service";
+import { SocketRateLimiter } from "../utils/socket-rate-limiter";
+import { MessageContentSchema } from "../services/validators";
+
+// Rate limiter cho Socket.IO send-message: 10 tin nhắn / phút / user
+const messageLimiter = new SocketRateLimiter();
+
+// Cleanup định kỳ mỗi 5 phút để tránh memory leak
+setInterval(() => messageLimiter.cleanup(), 5 * 60 * 1000);
 
 interface UserSession {
   userId: string;
@@ -53,7 +61,7 @@ export async function setupSocketHandlers(io: Server) {
     // Track connection
     await logAudit({
       actorId: userId,
-      action: "SOCKET_CONNECT",
+      action: AuditAction.SOCKET_CONNECT,
       targetType: "Socket",
       targetId: socket.id,
       description: `User connected to chat`,
@@ -188,7 +196,7 @@ export async function setupSocketHandlers(io: Server) {
 
         await logAudit({
           actorId: userId,
-          action: "LEAVE_ROOM",
+          action: AuditAction.LEAVE_ROOM,
           targetType: "Conversation",
           targetId: conversationId,
           description: `User left conversation`,
@@ -201,7 +209,7 @@ export async function setupSocketHandlers(io: Server) {
 
     /**
      * Event: send-message
-     * Send message to room
+     * Send message to room — with rate limiting + input sanitization
      */
     socket.on(
       "send-message",
@@ -210,32 +218,53 @@ export async function setupSocketHandlers(io: Server) {
         callback?
       ) => {
       try {
-        const { conversationId, content, imageUrl } = data;
+        // ── Rate limit: 10 tin nhắn / phút / user ────────────────────────
+        if (!messageLimiter.isAllowed(userId)) {
+          socket.emit("error", {
+            message: "Rate limit exceeded: maximum 10 messages per minute",
+            code: "RATE_LIMIT_EXCEEDED",
+            remaining: 0,
+          });
+          return;
+        }
+
+        // ── Validate + Sanitize input (Zod) ──────────────────────────────
+        const parsed = MessageContentSchema.safeParse(data);
+        if (!parsed.success) {
+          socket.emit("error", {
+            message: "Invalid message data",
+            code: "INVALID_INPUT",
+            details: parsed.error.errors,
+          });
+          return;
+        }
+
+        const { conversationId, content, imageUrl } = parsed.data;
         const trimmedContent = content?.trim() || "";
         const trimmedImageUrl = imageUrl?.trim() || "";
 
         if (!trimmedContent && !trimmedImageUrl) {
-          socket.emit("error", { 
+          socket.emit("error", {
             message: "Message must contain text or an image",
             code: "INVALID_INPUT"
           });
           return;
         }
 
-        // Verify user is member
+        // ── Verify user is member ─────────────────────────────────────────
         const member = await prisma.conversationMember.findUnique({
           where: {
             conversationId_userId: {
               conversationId,
-              userId
-            }
-          }
+              userId,
+            },
+          },
         });
 
         if (!member) {
-          socket.emit("error", { 
+          socket.emit("error", {
             message: "Not a member of this conversation",
-            code: "FORBIDDEN"
+            code: "FORBIDDEN",
           });
           return;
         }
@@ -260,8 +289,6 @@ export async function setupSocketHandlers(io: Server) {
           });
           return;
         }
-
-        // Create message
         const message = await prisma.message.create({
           data: {
             conversationId,
@@ -270,23 +297,23 @@ export async function setupSocketHandlers(io: Server) {
             senderId: userId,
           },
           include: {
-            sender: { select: { id: true, username: true, displayName: true } }
-          }
+            sender: { select: { id: true, username: true, displayName: true } },
+          },
         });
 
         console.log(`💬 Message sent in ${conversationId} by ${username}`);
 
-        // Audit log
+        // ── Audit log ─────────────────────────────────────────────────────
         await logAudit({
           actorId: userId,
-          action: "SEND_MESSAGE",
+          action: AuditAction.SEND_MESSAGE,
           targetType: "Message",
           targetId: message.id,
           description: `Sent message in conversation ${conversationId}`,
-          status: "SUCCESS"
+          status: "SUCCESS",
         });
 
-        // Broadcast message to room
+        // ── Broadcast to room ─────────────────────────────────────────────
         io.to(conversationId).emit("new-message", {
           id: message.id,
           conversationId,
@@ -294,18 +321,22 @@ export async function setupSocketHandlers(io: Server) {
           imageUrl: message.imageUrl,
           sender: message.sender,
           createdAt: message.createdAt,
-          updatedAt: message.updatedAt
+          updatedAt: message.updatedAt,
         });
 
         if (callback) {
-          callback({ success: true, messageId: message.id });
+          callback({
+            success: true,
+            messageId: message.id,
+            remaining: messageLimiter.getRemainingCount(userId),
+          });
         }
       } catch (err: any) {
         console.error("Failed to send message:", err);
-        socket.emit("error", { 
+        socket.emit("error", {
           message: "Failed to send message",
           code: "ERROR",
-          details: err.message
+          details: err.message,
         });
       }
     });
@@ -443,7 +474,7 @@ export async function setupSocketHandlers(io: Server) {
       // Audit log
       await logAudit({
         actorId: userId,
-        action: "SOCKET_DISCONNECT",
+        action: AuditAction.SOCKET_DISCONNECT,
         targetType: "Socket",
         targetId: socket.id,
         description: `User disconnected from chat`,

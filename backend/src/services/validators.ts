@@ -1,11 +1,12 @@
 import { z } from 'zod';
+import { sanitizeText, isSafeUrl, sanitizeMessageContent } from '../utils/sanitize';
 
 /**
  * Register validation schema
  * Email: valid email format
  * Username: 3-20 characters, alphanumeric + underscore
  * Password: at least 8 characters, must contain uppercase, lowercase, number
- * DisplayName: 1-50 characters
+ * DisplayName: 1-50 characters (sanitized against XSS)
  */
 export const RegisterSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -23,7 +24,8 @@ export const RegisterSchema = z.object({
   displayName: z
     .string()
     .min(1, 'Display name is required')
-    .max(100, 'Display name must not exceed 100 characters'),
+    .max(100, 'Display name must not exceed 100 characters')
+    .transform(sanitizeText), // Strip HTML/XSS từ displayName
 });
 
 export type RegisterInput = z.infer<typeof RegisterSchema>;
@@ -40,15 +42,21 @@ export const LoginSchema = z.object({
 export type LoginInput = z.infer<typeof LoginSchema>;
 
 /**
- * Update profile validation schema
+ * Update profile validation schema (sanitized against XSS)
  */
 export const UpdateProfileSchema = z.object({
   displayName: z
     .string()
     .min(1, 'Display name is required')
     .max(100, 'Display name must not exceed 100 characters')
+    .transform(sanitizeText)  // Strip HTML/XSS
     .optional(),
-  avatarUrl: z.string().url('Invalid URL').optional().or(z.literal('')),
+  avatarUrl: z
+    .string()
+    .url('Invalid URL')
+    .refine(isSafeUrl, 'URL phải bắt đầu bằng http:// hoặc https://')
+    .optional()
+    .or(z.literal('')),
 }).partial();
 
 export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
@@ -71,3 +79,23 @@ export const ChangePasswordSchema = z.object({
 });
 
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
+
+/**
+ * Message content validation schema — dùng trong Socket.IO send-message
+ * Sanitize nội dung tin nhắn để ngăn XSS stored
+ */
+export const MessageContentSchema = z.object({
+  conversationId: z.string().min(1, 'Conversation ID is required'),
+  content: z
+    .string()
+    .max(2000, 'Message must not exceed 2000 characters')
+    .transform(sanitizeMessageContent)
+    .optional()
+    .or(z.literal('')),
+  imageUrl: z
+    .string()
+    .optional()
+    .or(z.literal('')),
+});
+
+export type MessageContentInput = z.infer<typeof MessageContentSchema>;

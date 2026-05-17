@@ -9,6 +9,9 @@ coverage/
 .env
 .env.*
 !.env.example
+backend/.env
+frontend/.env
+backend/.env.example
 
 # Logs
 *.log
@@ -30,3 +33,7 @@ BACKEND_COMPLETION_STATUS.md
 db_init_sql
 /*.txt
 backend/*.md
+Phase5.md
+Phase6_Plan.md
+Phase7_Plan.md
+Phase6.md
