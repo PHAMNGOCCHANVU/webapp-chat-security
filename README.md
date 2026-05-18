@@ -1,116 +1,31 @@
-# Webapp Chat Security
+# Ứng Dụng Chat Nội Bộ Bảo Mật
 
-He thong nhan tin noi bo bao mat cho to chuc, tap trung vao 3 yeu to:
+Một ứng dụng trò chuyện nội bộ theo thời gian thực an toàn, được xây dựng bằng Node.js, Express, Socket.IO và SQL Server. Dự án này được thiết kế với trọng tâm cao vào các tiêu chuẩn bảo mật, bao gồm kiểm soát truy cập dựa trên vai trò (RBAC), nhật ký kiểm toán (audit log) bất biến và quản lý phiên (session) mạnh mẽ.
 
-- Xac thuc va phan quyen theo vai tro (RBAC).
-- Bao ve mat khau bang Argon2id.
-- Truy vet hanh dong nhay cam bang Audit Log.
+## Cấu Trúc Dự Án
 
-Noi dung nay tong hop tu tai lieu context.md va context-project.md de thanh vien moi clone ve co the bat dau lam viec ngay.
+Kho lưu trữ này được chia thành hai phần chính:
 
-## 1) Muc tieu de tai
+- **`frontend/`**: Ứng dụng phía máy khách (giao diện người dùng) sử dụng HTML/CSS/JS.
+- **`backend/`**: Máy chủ API và WebSocket được xây dựng bằng Express và Socket.IO, kết nối với cơ sở dữ liệu SQL Server thông qua Prisma ORM.
 
-- Xay dung webapp chat noi bo cho doanh nghiep vua va nho.
-- Ho tro chat 1-1 va chat nhom theo du an/phong ban.
-- Kiem soat truy cap trai phep va hien thi 403 khi can.
-- Ghi nhat ky thao tac nhay cam de phuc vu trach nhiem giai trinh.
+## Các Tính Năng Nổi Bật
 
-## 2) Kien truc tong quan
+- **Nhắn tin theo thời gian thực**: Trải nghiệm nhắn tin tức thời mượt mà sử dụng Socket.IO.
+- **Bảo mật mạnh mẽ**: 
+  - Mã hóa mật khẩu an toàn bằng thuật toán Argon2id.
+  - Quản lý phiên người dùng đáng tin cậy với PrismaSessionStore.
+  - Phân quyền nghiêm ngặt dựa trên vai trò (Quyền User và Admin).
+  - Áp dụng các chính sách CORS và Content Security Policy (CSP) chặt chẽ.
+  - Giới hạn tốc độ (Rate limiting) ở các endpoint API và WebSockets nhằm chống lại brute-force/spam.
+- **Nhật ký kiểm toán**: Tự động ghi nhận các thao tác quan trọng vào audit log thông qua SQL triggers, đảm bảo dữ liệu log không thể bị giả mạo hay xóa bỏ.
+- **Cơ sở dữ liệu**: Thiết kế chuẩn hóa cơ sở dữ liệu quan hệ với SQL Server.
 
-- Kieu kien truc: Decoupled Frontend/Backend + Layered Architecture o Backend.
-- Backend: Node.js + Express + Prisma + Socket.io + SQL Server.
-- Frontend: HTML/CSS/JS thuan, goi API qua Axios, realtime qua Socket.io-client.
+## Hướng Dẫn Cài Đặt
 
-Muc dich cua cach chia nay:
+Vui lòng xem chi tiết tại file [Hướng dẫn cài đặt (SETUP.md)](SETUP.md) để biết thêm về các bước thiết lập môi trường, cấu hình cơ sở dữ liệu và cách khởi động ứng dụng.
 
-- De phat trien song song Frontend va Backend.
-- De test bao mat va API bang Postman doc lap voi UI.
-- Giam xung dot khi lam viec nhom va merge code.
+## Tài Liệu và Kiểm Thử
 
-## 3) Cau truc thu muc
-
-```
-/webapp-chat-security
-|-- /backend
-|   |-- /prisma
-|   |   `-- schema.prisma
-|   |-- /src
-|   |   |-- /config
-|   |   |-- /controllers
-|   |   |-- /services
-|   |   |-- /middlewares
-|   |   |-- /routes
-|   |   |-- /sockets
-|   |   |-- /utils
-|   |   |-- app.ts
-|   |   `-- server.ts
-|   |-- .env
-|   |-- package.json
-|   `-- tsconfig.json
-|-- /frontend
-|   |-- /assets
-|   |-- /js
-|   |   |-- auth.js
-|   |   |-- chat.js
-|   |   `-- admin.js
-|   |-- /pages
-|   |   |-- login.html
-|   |   |-- chat-room.html
-|   |   |-- audit-log.html
-|   |   `-- access-denied.html
-|   `-- index.html
-|-- .gitignore
-`-- README.md
-```
-
-## 4) Chuc nang uu tien theo vai tro
-
-- User:
-  - Dang ky, dang nhap.
-  - Chat phong/ca nhan.
-- Owner:
-  - Quan ly thanh vien trong nhom minh tao.
-- Admin:
-  - Quan ly nguoi dung, cap quyen.
-  - Xem va loc Audit Log.
-
-## 5) Cai dat va chay du an
-
-Yeu cau:
-
-- Node.js LTS.
-- SQL Server (Express hoac Azure SQL).
-
-Buoc chay Backend:
-
-1. Mo terminal tai thu muc backend.
-2. Cai thu vien:
-	- npm install
-3. Chinh bien moi truong trong backend/.env (DATABASE_URL, JWT_SECRET).
-4. Tao Prisma Client:
-	- npm run prisma:generate
-5. Chay migration (neu da cau hinh DB san sang):
-	- npm run prisma:migrate
-6. Chay server dev:
-	- npm run dev
-
-Buoc chay Frontend:
-
-1. Mo frontend/index.html bang Live Server hoac static server.
-2. Dam bao backend dang chay o cong 4000 (hoac cap nhat URL trong js).
-
-## 6) Nguyen tac lam viec nhom
-
-- Khong hard-code secret vao code.
-- Moi API nhay cam phai qua middleware auth + role.
-- Moi thao tac thay doi du lieu quan trong phai ghi Audit Log.
-- Tuan thu chia lop: route -> controller -> service -> db.
-
-## 7) Cong viec tiep theo (backlog ky thuat)
-
-- Hoan thien middleware JWT, role check, audit logger.
-- Hoan thien route v1/auth, v1/rooms, v1/admin.
-- Hoan thien service hash/verify mat khau bang Argon2id.
-- Them bo test API va test quyen truy cap.
-- Nang cap giao dien MH-01 den MH-11 theo tai lieu thiet ke.
-
+- **Tài liệu API với Swagger UI**: Có sẵn tại `http://localhost:3000/api-docs` ngay sau khi backend được khởi động.
+- **Kiểm thử**: Được tích hợp sẵn các kịch bản kiểm thử bảo mật và hệ thống (E2E) thông qua PowerShell.

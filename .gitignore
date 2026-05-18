@@ -7,8 +7,8 @@ coverage/
 
 # Env and secrets
 .env
-.env.*
-!.env.example
+backend/.env
+frontend/.env
 
 # Logs
 *.log
@@ -24,3 +24,12 @@ Thumbs.db
 
 # Prisma local artifacts
 backend/prisma/dev.db
+
+*.sql
+BACKEND_COMPLETION_STATUS.md 
+*.txt
+backend/*.md
+Phase5.md
+Phase6_Plan.md
+Phase7_Plan.md
+Phase6.md

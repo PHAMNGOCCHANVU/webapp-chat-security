@@ -1,0 +1,20 @@
+{
+  "name": "zalegram-frontend",
+  "version": "1.0.0",
+  "description": "ZALEGRAM - Secure Internal Chat Frontend",
+  "private": true,
+  "scripts": {
+    "dev": "http-server -p 5173 -c-1 -o",
+    "start": "http-server -p 5173"
+  },
+  "keywords": [
+    "chat",
+    "realtime",
+    "secure"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

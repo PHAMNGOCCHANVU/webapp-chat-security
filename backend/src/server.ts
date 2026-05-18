@@ -1,27 +1,29 @@
 import http from "http";
 import { Server } from "socket.io";
+import session from "express-session";
 import app from "./app";
+import { env } from "./config/env";
+import { allowedOrigins } from "./config/cors";
+import { setupSocketHandlers } from "./sockets/chat.handler";
+import { sessionConfig } from "./config/session";
 
-const PORT = Number(process.env.PORT ?? 4000);
+const PORT = Number(env.PORT);
 
 const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: allowedOrigins, // Load từ env qua config/cors.ts
+    credentials: true,
   },
 });
 
-// TODO: Tach socket event handler sang src/sockets de de test va mo rong.
-io.on("connection", (socket) => {
-  socket.on("join-room", (roomId: string) => {
-    socket.join(roomId);
-  });
+// Share session middleware with Socket.IO
+const sessionMiddleware = sessionConfig;
+io.engine.use(sessionMiddleware);
 
-  socket.on("send-message", (payload: { roomId: string; content: string; sender: string }) => {
-    io.to(payload.roomId).emit("new-message", payload);
-  });
-});
+// Setup Socket.IO event handlers
+setupSocketHandlers(io);
 
 httpServer.listen(PORT, () => {
   // eslint-disable-next-line no-console
