@@ -1,10 +1,10 @@
-# 🚀 SETUP GUIDE — Secure Internal Chat Backend
+# Setup Guide — Secure Internal Chat Backend
 
 > Thời gian cài đặt: < 15 phút
 
 ---
 
-## 📋 Yêu cầu hệ thống
+## Yêu cầu hệ thống
 
 | Yêu cầu | Phiên bản |
 |---------|----------|
@@ -15,7 +15,7 @@
 
 ---
 
-## ⚡ Cài đặt nhanh
+## Cài đặt nhanh
 
 ### 1. Clone và cài dependencies
 
@@ -79,7 +79,7 @@ npm run build && npm start
 
 ---
 
-## 🔗 Các endpoints quan trọng
+## Các endpoints quan trọng
 
 | Endpoint | Mô tả |
 |---------|-------|
@@ -92,7 +92,7 @@ npm run build && npm start
 
 ---
 
-## 🧪 Chạy Tests
+## Chạy Tests
 
 ### Yêu cầu trước khi test
 
@@ -107,7 +107,7 @@ Thêm vào `.env`:
 NODE_ENV=test
 ```
 
-> ⚠️ Trong test mode, rate limits được nâng cao để không cản trở automated tests.
+> Lưu ý: Trong test mode, rate limits được nâng cao để không cản trở automated tests.
 
 ### Chạy tests
 
@@ -124,7 +124,7 @@ powershell -ExecutionPolicy Bypass -File "tests/scripts/test-security.ps1"
 
 ---
 
-## 🏗️ Cấu trúc thư mục
+## Cấu trúc thư mục
 
 ```
 backend/
@@ -155,7 +155,7 @@ backend/
 
 ---
 
-## 🔐 Tính năng bảo mật
+## Tính năng bảo mật
 
 | Layer | Cơ chế |
 |-------|--------|
@@ -173,21 +173,21 @@ backend/
 
 ---
 
-## 🐛 Xử lý lỗi thường gặp
+## Xử lý lỗi thường gặp
 
-### ❌ `Database connection failed`
+### Lỗi: Database connection failed
 - Kiểm tra SQL Server đang chạy
 - Verify `DATABASE_URL` trong `.env`
 - Kiểm tra firewall không block port 1433
 
-### ❌ `SESSION_SECRET` validation failed  
+### Lỗi: SESSION_SECRET validation failed  
 - `SESSION_SECRET` phải >= 10 ký tự
 - Tạo key mạnh: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
-### ❌ CORS error từ frontend
+### Lỗi: CORS error từ frontend
 - Thêm origin của frontend vào `ALLOWED_ORIGINS` trong `.env`
 - Ví dụ: `ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173`
 
-### ❌ `Too many requests (429)` khi test
+### Lỗi: Too many requests (429) khi test
 - Set `NODE_ENV=test` trong `.env` để nâng rate limits
 - Hoặc restart server để reset in-memory rate limit counters
