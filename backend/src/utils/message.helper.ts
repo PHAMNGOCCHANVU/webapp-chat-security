@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 
 import { userPreviewSelect } from "./conversation.helper";
+import { decryptMessage } from "./crypto";
 
 type PrismaExecutor = Prisma.TransactionClient | PrismaClient;
 
@@ -19,11 +20,14 @@ export function buildDirectMessageKey(userAId: string, userBId: string) {
 }
 
 export function serializeMessage(message: MessagePayload, currentUserId?: string) {
+  const content = decryptMessage(message.encryptedContent ? Buffer.from(message.encryptedContent) : null);
+
   return {
     id: message.id,
     conversationId: message.conversationId,
     senderId: message.senderId,
-    messageContent: message.messageContent,
+    content,
+    messageContent: content,
     imageUrl: message.imageUrl,
     isDeleted: message.isDeleted,
     createdAt: message.createdAt,

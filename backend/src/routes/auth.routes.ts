@@ -108,6 +108,22 @@ router.post("/login", loginLimiter, AuthController.login);
 
 /**
  * @swagger
+ * /api/v1/auth/refresh:
+ *   post:
+ *     summary: Làm mới access token
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Access token mới
+ *       401:
+ *         description: Refresh token không hợp lệ
+ *       403:
+ *         description: Chưa đăng nhập hoặc cookie hết hạn
+ */
+router.post("/refresh", AuthController.refresh);
+
+/**
+ * @swagger
  * /api/v1/auth/logout:
  *   post:
  *     summary: Đăng xuất

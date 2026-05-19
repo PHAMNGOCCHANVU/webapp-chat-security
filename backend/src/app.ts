@@ -1,43 +1,40 @@
+import compression from "compression";
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
+import fs from "fs";
 import helmet from "helmet";
 import morgan from "morgan";
-import cookieParser from "cookie-parser";
-import compression from "compression";
-import { sessionConfig } from "./config/session";
+import path from "path";
 import { corsOptions } from "./config/cors";
+import { env } from "./config/env";
 import { globalLimiter } from "./config/rate-limit";
+import { sessionConfig } from "./config/session";
+import { setupSwagger } from "./config/swagger";
 import { auditLogger } from "./middlewares/audit.middleware";
-import authRoutes from "./routes/auth.routes";
-import roomRoutes from "./routes/room.routes";
 import adminRoutes from "./routes/admin.routes";
+import authRoutes from "./routes/auth.routes";
+import conversationRoutes from "./routes/conversation.routes";
 import friendRoutes from "./routes/friend.routes";
 import messageRoutes from "./routes/message.routes";
-import conversationRoutes from "./routes/conversation.routes";
-import { setupSwagger } from "./config/swagger";
+import roomRoutes from "./routes/room.routes";
 
 const app = express();
+const frontendDistPath = path.resolve(__dirname, "../../frontend/dist");
+const frontendIndexPath = path.join(frontendDistPath, "index.html");
+const shouldServeFrontend =
+  (env.NODE_ENV === "production" || process.env.SERVE_FRONTEND === "true") &&
+  fs.existsSync(frontendIndexPath);
 
-// ── Ẩn Express server signature ──────────────────────────────────────────────
 app.disable("x-powered-by");
 
-// ── Security Headers (Helmet) — Task 6.2 ─────────────────────────────────────
 app.use(
   helmet({
-    // Content Security Policy tùy chỉnh cho Socket.IO + Swagger UI
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: [
-          "'self'",
-          "'unsafe-inline'", // Swagger UI cần inline scripts
-          "cdn.jsdelivr.net",
-        ],
-        styleSrc: [
-          "'self'",
-          "'unsafe-inline'", // Swagger UI cần inline styles
-          "cdn.jsdelivr.net",
-        ],
+        scriptSrc: ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net"],
+        styleSrc: ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net"],
         imgSrc: ["'self'", "data:", "validator.swagger.io"],
         connectSrc: [
           "'self'",
@@ -45,6 +42,10 @@ app.use(
           "wss://localhost:3000",
           "ws://127.0.0.1:3000",
           "wss://127.0.0.1:3000",
+          "ws://localhost:4000",
+          "wss://localhost:4000",
+          "ws://127.0.0.1:4000",
+          "wss://127.0.0.1:4000",
         ],
         fontSrc: ["'self'", "data:"],
         objectSrc: ["'none'"],
@@ -52,11 +53,9 @@ app.use(
         upgradeInsecureRequests: [],
       },
     },
-    // Tắt để tránh conflict với Swagger UI
     crossOriginEmbedderPolicy: false,
-    // HTTP Strict Transport Security
     hsts: {
-      maxAge: 31536000,        // 1 năm
+      maxAge: 31536000,
       includeSubDomains: true,
       preload: true,
     },
@@ -66,48 +65,34 @@ app.use(
   })
 );
 
-// ── Response Compression — Task 6.6 ──────────────────────────────────────────
 app.use(
   compression({
     filter: (req, res) => {
-      if (req.headers["x-no-compression"]) return false;
+      if (req.headers["x-no-compression"]) {
+        return false;
+      }
       return compression.filter(req, res);
     },
-    level: 6,        // Cân bằng tốc độ vs tỉ lệ nén (0–9)
-    threshold: 1024, // Chỉ nén response > 1KB
+    level: 6,
+    threshold: 1024,
   })
 );
 
-// ── CORS — Task 6.3 (load từ env, tập trung tại config/cors.ts) ──────────────
 app.use(cors(corsOptions));
-
-// ── Global Rate Limiter — Task 6.4 ───────────────────────────────────────────
 app.use(globalLimiter);
-
 app.use(cookieParser());
-
-// ── Body Parsing (với giới hạn 10KB) — Task 6.5 ──────────────────────────────
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
-
-// ── Logging ───────────────────────────────────────────────────────────────────
 app.use(morgan("dev"));
-
-// ── Session ───────────────────────────────────────────────────────────────────
 app.use(sessionConfig);
 
-// ── Swagger UI ────────────────────────────────────────────────────────────────
 setupSwagger(app);
-
-// ── Auto-Audit Middleware (sau session) — Phase 5 ─────────────────────────────
 app.use(auditLogger);
 
-// ── Health Check (không bị rate limit) ───────────────────────────────────────
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// ── API Routes ────────────────────────────────────────────────────────────────
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/rooms", roomRoutes);
 app.use("/api/v1/admin", adminRoutes);
@@ -115,21 +100,39 @@ app.use("/api/v1/friends", friendRoutes);
 app.use("/api/v1/messages", messageRoutes);
 app.use("/api/v1/conversations", conversationRoutes);
 
-// ── 404 Handler ───────────────────────────────────────────────────────────────
+if (process.env.SERVE_FRONTEND === "true" && !shouldServeFrontend) {
+  console.warn(
+    `[Demo] Frontend build not found at ${frontendIndexPath}. Run the demo build step first.`
+  );
+}
+
+if (shouldServeFrontend) {
+  app.use(
+    express.static(frontendDistPath, {
+      index: false,
+    })
+  );
+
+  app.get(/^\/(?!api\/|api-docs(?:\/|$)|health$).*/, (_req, res) => {
+    res.sendFile(frontendIndexPath);
+  });
+}
+
 app.use((_req, res) => {
   res.status(404).json({ error: "Endpoint not found" });
 });
 
-// ── Global Error Handler ──────────────────────────────────────────────────────
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err.message?.includes("CORS")) {
     return res.status(403).json({ error: "CORS policy violation" });
   }
+
   if (err.status === 413) {
     return res.status(413).json({ error: "Request payload too large (max 10KB)" });
   }
+
   console.error("[Error]", err.message);
-  res.status(500).json({ error: "Internal server error" });
+  return res.status(500).json({ error: "Internal server error" });
 });
 
 export default app;

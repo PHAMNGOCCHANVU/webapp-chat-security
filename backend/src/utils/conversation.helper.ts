@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { decryptMessage } from "./crypto";
 
 export const userPreviewSelect = {
   id: true,
@@ -35,6 +36,10 @@ export function serializeConversation(
   conversation: ConversationPayload,
   currentUserId?: string
 ) {
+  const lastMessageContent = conversation.lastMessage?.encryptedContent
+    ? decryptMessage(Buffer.from(conversation.lastMessage.encryptedContent))
+    : null;
+
   const currentMembership = currentUserId
     ? conversation.members.find((member) => member.userId === currentUserId)
     : null;
@@ -105,7 +110,8 @@ export function serializeConversation(
           id: conversation.lastMessage.id,
           conversationId: conversation.lastMessage.conversationId,
           senderId: conversation.lastMessage.senderId,
-          messageContent: conversation.lastMessage.messageContent,
+          content: lastMessageContent,
+          messageContent: lastMessageContent,
           imageUrl: conversation.lastMessage.imageUrl,
           isDeleted: conversation.lastMessage.isDeleted,
           createdAt: conversation.lastMessage.createdAt,

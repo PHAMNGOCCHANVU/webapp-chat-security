@@ -2,6 +2,7 @@ import { Server, Socket } from "socket.io";
 import { prisma } from "../config/prisma";
 import { logAudit, AuditAction } from "../services/audit.service";
 import { SocketRateLimiter } from "../utils/socket-rate-limiter";
+import { decryptMessage, encryptMessage } from "../utils/crypto";
 import { MessageContentSchema } from "../services/validators";
 
 // Rate limiter cho Socket.IO send-message: 10 tin nhắn / phút / user
@@ -289,13 +290,17 @@ export async function setupSocketHandlers(io: Server) {
           });
           return;
         }
-        const message = await prisma.message.create({
+        const messageRecord = await prisma.message.create({
           data: {
             conversationId,
-            messageContent: trimmedContent || null,
+            encryptedContent: encryptMessage(trimmedContent),
             imageUrl: trimmedImageUrl || null,
             senderId: userId,
           },
+        });
+
+        const message = await prisma.message.findUniqueOrThrow({
+          where: { id: messageRecord.id },
           include: {
             sender: { select: { id: true, username: true, displayName: true } },
           },
@@ -317,7 +322,7 @@ export async function setupSocketHandlers(io: Server) {
         io.to(conversationId).emit("new-message", {
           id: message.id,
           conversationId,
-          content: message.messageContent,
+          content: decryptMessage(message.encryptedContent ? Buffer.from(message.encryptedContent) : null),
           imageUrl: message.imageUrl,
           sender: message.sender,
           createdAt: message.createdAt,

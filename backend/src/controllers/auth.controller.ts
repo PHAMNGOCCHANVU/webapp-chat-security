@@ -1,22 +1,42 @@
 import { Request, Response } from "express";
-import { AuthService } from "../services/auth.service";
-import { RegisterSchema, LoginSchema, UpdateProfileSchema, ChangePasswordSchema } from "../services/validators";
-import { logAudit, AuditAction } from "../services/audit.service";
-import { z } from "zod";
 import jwt from "jsonwebtoken";
+import { z } from "zod";
+import { env } from "../config/env";
+import { logAudit, AuditAction } from "../services/audit.service";
+import { AuthService } from "../services/auth.service";
+import {
+  RegisterSchema,
+  LoginSchema,
+  UpdateProfileSchema,
+  ChangePasswordSchema,
+} from "../services/validators";
 
-/**
- * Auth Controller - Handle authentication endpoints
- */
+const ACCESS_TOKEN_TTL = "24h";
+const REFRESH_TOKEN_TTL = "24h";
+const REFRESH_COOKIE_NAME = "refreshToken";
+
+const refreshCookieBaseOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === "production",
+  sameSite: "strict" as const,
+};
+
+const createAccessToken = (user: { id: string; username: string }) =>
+  jwt.sign({ userId: user.id, username: user.username }, env.JWT_SECRET, {
+    expiresIn: ACCESS_TOKEN_TTL,
+  });
+
+const createRefreshToken = (userId: string) =>
+  jwt.sign({ userId }, env.JWT_REFRESH_SECRET, {
+    expiresIn: REFRESH_TOKEN_TTL,
+  });
+
 export class AuthController {
-  /**
-   * POST /auth/register
-   * Register a new user
-   */
   static async register(req: Request, res: Response) {
     try {
       const data = RegisterSchema.parse(req.body);
       const user = await AuthService.register(data);
+
       await logAudit({
         actorId: user.id,
         action: AuditAction.REGISTER,
@@ -28,18 +48,16 @@ export class AuthController {
         status: "SUCCESS",
       });
 
-      // Generate JWT
       const token = jwt.sign(
         { userId: user.id, username: user.username },
-        process.env.JWT_SECRET || "default_jwt_secret",
+        env.JWT_SECRET,
         { expiresIn: "1d" }
       );
 
-      // Set cookie
       res.cookie("token", token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
+        secure: env.NODE_ENV === "production",
+        maxAge: 24 * 60 * 60 * 1000,
       });
 
       res.status(201).json({
@@ -68,70 +86,53 @@ export class AuthController {
     }
   }
 
-  /**
-   * POST /auth/login
-   * Login user and create session
-   */
   static async login(req: Request, res: Response) {
     try {
-      // 1. lấy input
       const data = LoginSchema.parse(req.body);
-      
-      // 2. lấy hashedPassword trong db để so với password input (done in AuthService.login)
       const user = await AuthService.login(data);
+      const accessToken = createAccessToken(user);
+      const refreshToken = createRefreshToken(user.id);
 
-      // 3. nếu khớp, tạo accessToken với JWT
-      const accessToken = jwt.sign(
-        { userId: user.id, username: user.username },
-        process.env.JWT_SECRET || "default_jwt_secret",
-        { expiresIn: "3m" }
-      );
-
-      // 4. tạo refresh token
-      const refreshToken = jwt.sign(
-        { userId: user.id },
-        process.env.JWT_REFRESH_SECRET || "default_refresh_secret",
-        { expiresIn: "7d" }
-      );
-
-      // 5. tạo session mới để lưu refresh token
       req.session.regenerate(async (err) => {
         if (err) {
           return res.status(500).json({ error: "Could not create session" });
         }
 
-        (req.session as any).userId = user.id;
-        (req.session as any).username = user.username;
-        (req.session as any).refreshToken = refreshToken;
+        try {
+          req.session.userId = user.id;
+          req.session.username = user.username;
+          req.session.refreshToken = refreshToken;
 
-        await logAudit({
-          actorId: user.id,
-          action: AuditAction.LOGIN,
-          module: "AUTH",
-          targetType: "USER",
-          targetId: user.id,
-          description: `User logged in: ${user.username}`,
-          request: req,
-          status: "SUCCESS",
-        });
-
-        // 6. trả refresh token về trong cookie
-        res.cookie("refreshToken", refreshToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        });
-
-        req.session.save((saveErr) => {
-          if (saveErr) {
-            return res.status(500).json({ error: "Session save failed" });
-          }
-          res.status(200).json({
-            message: "Login successful",
-            accessToken,
-            user,
+          await logAudit({
+            actorId: user.id,
+            action: AuditAction.LOGIN,
+            module: "AUTH",
+            targetType: "USER",
+            targetId: user.id,
+            description: `User logged in: ${user.username}`,
+            request: req,
+            status: "SUCCESS",
           });
-        });
+
+          res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
+            ...refreshCookieBaseOptions,
+            maxAge: 24 * 60 * 60 * 1000,
+          });
+
+          req.session.save((saveErr) => {
+            if (saveErr) {
+              return res.status(500).json({ error: "Session save failed" });
+            }
+
+            res.status(200).json({
+              message: "Login successful",
+              accessToken,
+              user,
+            });
+          });
+        } catch (sessionError: any) {
+          res.status(500).json({ error: sessionError.message ?? "Login failed" });
+        }
       });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -154,19 +155,47 @@ export class AuthController {
     }
   }
 
-  /**
-   * POST /auth/logout
-   * Logout user and destroy session
-   */
-  static async logout(req: Request, res: Response) {
-    const userId = (req.session as any).userId;
-    const username = (req.session as any).username;
+  static async refresh(req: Request, res: Response) {
+    const refreshToken = req.cookies?.[REFRESH_COOKIE_NAME];
+
+    if (!refreshToken) {
+      return res.status(401).json({ error: "No refresh token provided" });
+    }
 
     try {
-      // 1. lấy refresh token từ cookie
-      const refreshToken = req.cookies?.refreshToken;
+      const decoded = jwt.verify(refreshToken, env.JWT_REFRESH_SECRET) as { userId: string };
 
-      // Log audit before destroying session
+      if (!req.session.userId || !req.session.refreshToken) {
+        return res.status(401).json({ error: "Session not found" });
+      }
+
+      if (req.session.refreshToken !== refreshToken || req.session.userId !== decoded.userId) {
+        return res.status(401).json({ error: "Invalid refresh token" });
+      }
+
+      const user = await AuthService.getUserForSession(decoded.userId);
+
+      if (!user) {
+        return res.status(401).json({ error: "User no longer exists" });
+      }
+
+      if (["LOCKED", "DISABLED", "DELETED", "BANNED"].includes(user.status)) {
+        return res.status(403).json({ error: "Account no longer has access" });
+      }
+
+      res.status(200).json({
+        accessToken: createAccessToken(user),
+      });
+    } catch {
+      return res.status(401).json({ error: "Refresh token expired or invalid" });
+    }
+  }
+
+  static async logout(req: Request, res: Response) {
+    const userId = req.session.userId;
+    const username = req.session.username;
+
+    try {
       if (userId) {
         await logAudit({
           actorId: userId,
@@ -179,16 +208,16 @@ export class AuthController {
           status: "SUCCESS",
         });
       }
+
       req.session.destroy((err) => {
         if (err) {
           return res.status(500).json({ error: "Could not logout" });
         }
 
-        // 3. xoá cookie
-        res.clearCookie("refreshToken");
-        res.clearCookie("token"); // just in case it was set from register
+        res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieBaseOptions);
+        res.clearCookie("token");
         res.clearCookie("connect.sid");
-        
+
         res.status(200).json({ message: "Logged out successfully" });
       });
     } catch (error: any) {
@@ -196,13 +225,9 @@ export class AuthController {
     }
   }
 
-  /**
-   * GET /auth/profile
-   * Get current user profile
-   */
   static async getProfile(req: Request, res: Response) {
     try {
-      const userId = (req.session as any).userId;
+      const userId = req.session.userId;
 
       if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -215,13 +240,9 @@ export class AuthController {
     }
   }
 
-  /**
-   * PUT /auth/profile
-   * Update user profile
-   */
   static async updateProfile(req: Request, res: Response) {
     try {
-      const userId = (req.session as any).userId;
+      const userId = req.session.userId;
 
       if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -267,12 +288,8 @@ export class AuthController {
     }
   }
 
-  /**
-   * POST /auth/change-password
-   * Change user password
-   */
   static async changePassword(req: Request, res: Response) {
-    const userId = (req.session as any).userId;
+    const userId = req.session.userId;
 
     try {
       if (!userId) {

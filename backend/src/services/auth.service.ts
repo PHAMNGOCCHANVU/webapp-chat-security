@@ -5,6 +5,13 @@ import { RegisterInput, LoginInput, UpdateProfileInput, ChangePasswordInput } fr
 import { ensureSystemRbacCatalog } from "./rbac-catalog.service";
 
 const normalizeStatus = (status: string) => (status === "BANNED" ? "DISABLED" : status);
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+const INVALID_CREDENTIALS_MESSAGE = "Invalid username/email or password";
+const TEMPORARY_LOCK_MESSAGE = "Account is temporarily locked. Try again later.";
+
+const isTemporaryLockActive = (lockedUntil: Date | null | undefined) =>
+  Boolean(lockedUntil && lockedUntil.getTime() > Date.now());
 
 /**
  * Auth Service - Handle authentication logic
@@ -106,7 +113,7 @@ export class AuthService {
    */
   static async login(input: LoginInput) {
     // Find user by email or username
-    const user = await prisma.user.findFirst({
+    let user = await prisma.user.findFirst({
       where: {
         OR: [
           { email: input.username },
@@ -116,10 +123,29 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new Error("Invalid username/email or password");
+      throw new Error(INVALID_CREDENTIALS_MESSAGE);
     }
 
-    // Check if account is locked
+    if (user.status === "ACTIVE" && user.lockedUntil && !isTemporaryLockActive(user.lockedUntil)) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginCount: 0,
+          lockedUntil: null,
+        },
+      });
+
+      user = {
+        ...user,
+        failedLoginCount: 0,
+        lockedUntil: null,
+      };
+    }
+
+    if (isTemporaryLockActive(user.lockedUntil)) {
+      throw new Error(TEMPORARY_LOCK_MESSAGE);
+    }
+
     if (user.status === "LOCKED") {
       throw new Error("Account is locked");
     }
@@ -136,8 +162,36 @@ export class AuthService {
     const isPasswordValid = await verifyPassword(user.passwordHash, input.password);
 
     if (!isPasswordValid) {
-      throw new Error("Invalid username/email or password");
+      const failedAttempt = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginCount: { increment: 1 },
+        },
+        select: {
+          failedLoginCount: true,
+        },
+      });
+
+      if (failedAttempt.failedLoginCount >= MAX_FAILED_LOGIN_ATTEMPTS) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            failedLoginCount: MAX_FAILED_LOGIN_ATTEMPTS,
+            lockedUntil: new Date(Date.now() + LOCKOUT_DURATION_MS),
+          },
+        });
+
+        throw new Error(TEMPORARY_LOCK_MESSAGE);
+      }
+
+      throw new Error(INVALID_CREDENTIALS_MESSAGE);
     }
+
+    // Reset lockout counters on success
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() }
+    });
 
     return {
       id: user.id,
@@ -146,6 +200,17 @@ export class AuthService {
       email: user.email,
       status: user.status,
     };
+  }
+
+  static async getUserForSession(userId: string) {
+    return prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        status: true,
+      },
+    });
   }
 
   /**

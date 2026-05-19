@@ -1,4 +1,4 @@
-import api from "@/lib/axios"
+import api, { requestAccessTokenRefresh } from "@/lib/axios"
 import type { UserProfile } from "@/types/user"
 
 type RegisterPayload = {
@@ -24,18 +24,20 @@ export const authService = {
     return res.data
   },
 
-  async signOut(accessToken?: string | null) {
-    if (!accessToken) {
-      return
-    }
+  async refreshAccessToken() {
+    return requestAccessTokenRefresh()
+  },
 
+  async signOut(accessToken?: string | null) {
     await api.post(
       "/auth/logout",
       {},
       {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
       }
     )
   },

@@ -37,6 +37,12 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  isEmailVerified  Boolean   @default(false) @map("is_email_verified")
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until")
+  lastLoginAt      DateTime? @map("last_login_at")
+  deletedAt        DateTime? @map("deleted_at")
+
   @@map("users")
 }
 
@@ -196,7 +202,7 @@ model Message {
   id              String @id @default(uuid())
   conversationId  String @map("conversation_id")
   senderId        String @map("sender_id")
-  messageContent  String? @map("message_content") @db.NVarChar(Max)
+  encryptedContent Bytes? @map("encrypted_content")
   imageUrl        String? @map("image_url")
   isDeleted       Boolean @default(false) @map("is_deleted")
 

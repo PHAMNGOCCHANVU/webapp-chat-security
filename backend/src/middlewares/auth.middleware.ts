@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../config/prisma";
 import { logAudit, AuditAction } from "../services/audit.service";
+import { env } from "../config/env";
 
 const normalizeStatus = (status: string) => (status === "BANNED" ? "DISABLED" : status);
 
@@ -30,7 +31,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       });
     }
 
-    const secret = process.env.JWT_SECRET || "default_jwt_secret";
+    const secret = env.JWT_SECRET;
     const decoded = jwt.verify(token, secret) as { userId: string; username: string };
 
     const user = await prisma.user.findUnique({

@@ -3,11 +3,13 @@
 Mục tiêu:
 
 - Chặn truy cập trái phép theo RBAC.
-- Kiểm tra JWT trước khi vào controller.
+- Kiểm tra access token của REST API trước khi vào controller.
 - Ghi log request nhạy cảm phục vụ audit.
+- Đồng bộ thông tin người dùng vào session để RBAC và audit dùng lại.
 
-Việc cần làm tiếp:
+Hiện trạng:
 
-- auth.middleware.ts: verify JWT.
-- role.middleware.ts: cho phép theo vai trò USER/ADMIN/OWNER.
-- audit.middleware.ts: ghi hành động POST/PUT/DELETE.
+- `auth.middleware.ts`: verify JWT từ header `Authorization: Bearer ...`, kiểm tra trạng thái tài khoản và đồng bộ `req.session.userId`.
+- `role.middleware.ts`: kiểm tra role/permission dựa trên session đã có `userId`.
+- `audit.middleware.ts`: ghi hành động nhạy cảm của request phục vụ audit log.
+- Xác thực `Socket.IO` không đi qua thư mục này mà dùng session cookie `connect.sid` trong `sockets/`.

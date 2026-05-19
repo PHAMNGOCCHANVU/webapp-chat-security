@@ -33,6 +33,29 @@ GO
 
 /*
     ============================================================
+    SECURITY SETUP - COLUMN LEVEL ENCRYPTION
+    ============================================================
+*/
+IF NOT EXISTS (SELECT * FROM sys.symmetric_keys WHERE name = 'MsgEncryptKey')
+BEGIN
+    IF NOT EXISTS (SELECT * FROM sys.symmetric_keys WHERE name = '##MS_DatabaseMasterKey##')
+    BEGIN
+        CREATE MASTER KEY ENCRYPTION BY PASSWORD = 'MasterKeyPassword@123';
+    END
+
+    IF NOT EXISTS (SELECT * FROM sys.certificates WHERE name = 'MsgEncryptCert')
+    BEGIN
+        CREATE CERTIFICATE MsgEncryptCert WITH SUBJECT = 'Message Encryption';
+    END
+
+    CREATE SYMMETRIC KEY MsgEncryptKey
+      WITH ALGORITHM = AES_256
+      ENCRYPTION BY CERTIFICATE MsgEncryptCert;
+END
+GO
+
+/*
+    ============================================================
     CLEANUP FOR DEVELOPMENT
     ============================================================
 */
@@ -347,7 +370,7 @@ CREATE TABLE dbo.messages
     message_type NVARCHAR(20) NOT NULL DEFAULT N'TEXT'
         CONSTRAINT CK_messages_type CHECK (message_type IN (N'TEXT', N'IMAGE', N'FILE', N'SYSTEM')),
 
-    message_content NVARCHAR(MAX) NULL,
+    encrypted_content VARBINARY(MAX) NULL,
     image_url NVARCHAR(1000) NULL,
     file_url NVARCHAR(1000) NULL,
     file_name NVARCHAR(255) NULL,

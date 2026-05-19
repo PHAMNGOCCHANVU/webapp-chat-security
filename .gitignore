@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 coverage/
+.demo-runtime/
 
 # Env and secrets
 .env

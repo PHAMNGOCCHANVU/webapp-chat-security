@@ -13,6 +13,7 @@ import {
   serializeMessage,
   updateConversationAfterCreateMessage,
 } from "../utils/message.helper";
+import { encryptMessage } from "../utils/crypto";
 
 const baseMessageSchema = z.object({
   content: z.string().trim().optional(),
@@ -105,13 +106,17 @@ export class MessageController {
           },
         });
 
-        const createdMessage = await tx.message.create({
+        const createdMessageRecord = await tx.message.create({
           data: {
             conversationId: conversation.id,
             senderId,
-            messageContent: trimmedContent || null,
+            encryptedContent: encryptMessage(trimmedContent),
             imageUrl: trimmedImageUrl || null,
           },
+        });
+
+        const createdMessage = await tx.message.findUniqueOrThrow({
+          where: { id: createdMessageRecord.id },
           include: messageInclude,
         });
 
@@ -176,13 +181,17 @@ export class MessageController {
       }
 
       const result = await prisma.$transaction(async (tx) => {
-        const createdMessage = await tx.message.create({
+        const createdMessageRecord = await tx.message.create({
           data: {
             conversationId,
             senderId,
-            messageContent: trimmedContent || null,
+            encryptedContent: encryptMessage(trimmedContent),
             imageUrl: trimmedImageUrl || null,
           },
+        });
+
+        const createdMessage = await tx.message.findUniqueOrThrow({
+          where: { id: createdMessageRecord.id },
           include: messageInclude,
         });
 

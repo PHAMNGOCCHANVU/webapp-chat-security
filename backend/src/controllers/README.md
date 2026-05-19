@@ -6,8 +6,8 @@ Mục tiêu:
 - Gọi service xử lý nghiệp vụ.
 - Trả response chuẩn JSON và mã HTTP phù hợp.
 
-Việc cần làm tiếp:
+Hiện trạng:
 
-- authController: register/login/profile.
+- authController: register/login/refresh/logout/profile/change-password.
 - roomController: tạo phòng, thêm/xóa thành viên.
 - adminController: quản lý user, xem audit log.

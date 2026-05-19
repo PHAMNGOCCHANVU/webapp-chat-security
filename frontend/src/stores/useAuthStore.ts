@@ -150,11 +150,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   bootstrap: async () => {
-    const { accessToken, user, fetchProfile } = get()
+    let { accessToken } = get()
+    const { user, fetchProfile, setAccessToken } = get()
 
     if (!accessToken) {
-      set({ initialized: true })
-      return
+      try {
+        accessToken = await authService.refreshAccessToken()
+        setAccessToken(accessToken)
+      } catch {
+        set({ initialized: true })
+        return
+      }
     }
 
     if (user?.roles?.length) {

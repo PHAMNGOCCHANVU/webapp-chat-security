@@ -1,13 +1,23 @@
 import { env } from "./env";
 
+const defaultServerOrigins = [
+  `http://localhost:${env.PORT}`,
+  `http://127.0.0.1:${env.PORT}`,
+];
+
 /**
  * Danh sách origins được phép truy cập API.
  * Load từ biến môi trường ALLOWED_ORIGINS (phân cách bởi dấu phẩy).
  */
-export const allowedOrigins: string[] = env.ALLOWED_ORIGINS
-  .split(",")
-  .map((o) => o.trim())
-  .filter(Boolean);
+export const allowedOrigins: string[] = Array.from(
+  new Set(
+    env.ALLOWED_ORIGINS
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean)
+      .concat(defaultServerOrigins)
+  )
+);
 
 /**
  * CORS options dùng chung cho Express app và Socket.IO server.

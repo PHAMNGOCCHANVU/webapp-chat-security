@@ -18,6 +18,43 @@ import type {
   UpdateAdminUserPayload,
 } from "@/types/admin"
 
+type CollectionEnvelope<T> =
+  | T[]
+  | {
+      value?: T[]
+      data?: T[]
+      items?: T[]
+      results?: T[]
+    }
+
+const unwrapCollection = <T>(payload: CollectionEnvelope<T> | undefined | null): T[] => {
+  if (Array.isArray(payload)) {
+    return payload
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return []
+  }
+
+  if (Array.isArray(payload.value)) {
+    return payload.value
+  }
+
+  if (Array.isArray(payload.data)) {
+    return payload.data
+  }
+
+  if (Array.isArray(payload.items)) {
+    return payload.items
+  }
+
+  if (Array.isArray(payload.results)) {
+    return payload.results
+  }
+
+  return []
+}
+
 export const adminService = {
   async getUsers(search?: string, status?: string): Promise<AdminUser[]> {
     const searchParams = new URLSearchParams()
@@ -31,8 +68,10 @@ export const adminService = {
     }
 
     const query = searchParams.toString()
-    const response = await api.get<AdminUser[]>(query ? `/admin/users?${query}` : "/admin/users")
-    return response.data
+    const response = await api.get<CollectionEnvelope<AdminUser>>(
+      query ? `/admin/users?${query}` : "/admin/users"
+    )
+    return unwrapCollection(response.data)
   },
 
   async getUser(userId: string): Promise<AdminUserDetail> {
@@ -59,8 +98,8 @@ export const adminService = {
   },
 
   async getRoles(): Promise<AdminRole[]> {
-    const response = await api.get<AdminRole[]>("/admin/roles")
-    return response.data
+    const response = await api.get<CollectionEnvelope<AdminRole>>("/admin/roles")
+    return unwrapCollection(response.data)
   },
 
   async getPermissions(): Promise<AdminPermission[]> {
@@ -126,11 +165,11 @@ export const adminService = {
     }
 
     const query = searchParams.toString()
-    const response = await api.get<AdminAuditLog[]>(
+    const response = await api.get<CollectionEnvelope<AdminAuditLog>>(
       query ? `/admin/audit-logs?${query}` : "/admin/audit-logs"
     )
 
-    return response.data
+    return unwrapCollection(response.data)
   },
 
   async getSystemStats(): Promise<SystemStats> {
@@ -154,10 +193,10 @@ export const adminService = {
     }
 
     const query = searchParams.toString()
-    const response = await api.get<AdminConversation[]>(
+    const response = await api.get<CollectionEnvelope<AdminConversation>>(
       query ? `/admin/conversations?${query}` : "/admin/conversations"
     )
-    return response.data
+    return unwrapCollection(response.data)
   },
 
   async getConversation(conversationId: string): Promise<AdminConversationDetail> {
