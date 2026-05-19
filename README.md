@@ -222,6 +222,11 @@ Trong chế độ demo, `start-demo.bat` đã bật `DEMO_MODE` để nới rate
 
 Nếu cần một quy trình ngắn nhất để người khác mở máy và chạy hệ thống:
 
+> [!IMPORTANT]
+> **Lưu ý tiên quyết trước khi bắt đầu:**
+> 1. **SQL Server đang chạy:** Đảm bảo dịch vụ SQL Server (SQLEXPRESS hoặc phiên bản khác) trên máy tính đang ở trạng thái **Running** (Hoạt động).
+> 2. **Cập nhật DATABASE_URL:** Đừng quên mở file `backend/.env` mới tạo ở bước 1 và chỉnh sửa thông tin tài khoản, mật khẩu SQL Server ở biến `DATABASE_URL` cho khớp hoàn toàn với thông số cấu hình máy tính đang chạy trước khi thực hiện bước 3.
+
 1. Tạo `backend/.env` từ `.env.example`
 2. Điền đúng `DATABASE_URL` và các secret
 3. Chạy `.\prepare-demo.bat`

@@ -482,11 +482,11 @@ const AdminDashboardPage = () => {
 
     try {
       await adminService.deleteUser(deleteTarget.id)
-      toast.success(`Đã xóa mềm tài khoản ${deleteTarget.username}.`)
+      toast.success(`Đã xóa tài khoản ${deleteTarget.username} khỏi danh sách sử dụng.`)
       setDeleteTarget(null)
       handleRefresh()
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Không thể xóa mềm tài khoản này.")
+      toast.error(error instanceof Error ? error.message : "Không thể xóa tài khoản này khỏi danh sách sử dụng.")
     } finally {
       setBusyUserId(null)
     }
@@ -497,7 +497,7 @@ const AdminDashboardPage = () => {
         {
           label: "Tổng người dùng",
           value: stats.totalUsers,
-          accent: `${formatNumber(stats.deletedUsers)} tài khoản xóa mềm được giữ lại`,
+          accent: `${formatNumber(stats.deletedUsers)} tài khoản đã xóa nhưng vẫn giữ lại dữ liệu`,
           icon: Users,
           theme: "from-sky-500/20 via-sky-500/5 to-transparent",
         },
@@ -551,7 +551,7 @@ const AdminDashboardPage = () => {
         {
           title: "Người dùng",
           description:
-            "Xem danh sách, tìm kiếm, kiểm tra thông tin, tạo mới, cập nhật, khóa, vô hiệu hóa, gán role và xóa mềm người dùng.",
+            "Xem danh sách, tìm kiếm, kiểm tra thông tin, tạo mới, cập nhật, khóa, vô hiệu hóa, gán role và xóa tài khoản khỏi danh sách sử dụng.",
           metrics: [
             `Tổng: ${formatNumber(stats.totalUsers)}`,
             `Hoạt động: ${formatNumber(stats.activeUsers)}`,
@@ -665,7 +665,7 @@ const AdminDashboardPage = () => {
                       Giám sát hệ thống & Quản lý người dùng toàn diện
                     </h2>
                     <p className="max-w-xl text-sm text-sky-50/88 lg:text-base">
-                      Giao diện quản trị cung cấp bảng giám sát hệ thống, quản lý người dùng (xóa mềm), kiểm
+                      Giao diện quản trị cung cấp bảng giám sát hệ thống, quản lý người dùng, kiểm
                       soát Role và theo dõi Audit Log bảo mật.
                     </p>
                   </div>
@@ -693,7 +693,7 @@ const AdminDashboardPage = () => {
                       {stats
                         ? `${formatNumber(stats.failedLoginsToday)} lần đăng nhập lỗi và ${formatNumber(
                             stats.deletedUsers
-                          )} tài khoản đã xóa được lưu trữ`
+                          )} tài khoản đã xóa nhưng vẫn được giữ lại dữ liệu`
                         : "Đang thu thập dữ liệu giám sát..."}
                     </p>
                   </div>
@@ -1027,7 +1027,7 @@ const AdminDashboardPage = () => {
                       <p className="font-medium">Quản lý người dùng</p>
                       <p className="text-sm text-muted-foreground">
                         Tìm kiếm theo username, email hoặc tên hiển thị, sau đó thực hiện tạo mới, xem chi tiết,
-                        cập nhật, phân quyền, khóa, vô hiệu hóa, khôi phục hoặc xóa mềm tài khoản.
+                        cập nhật, phân quyền, khóa, vô hiệu hóa, khôi phục hoặc xóa tài khoản khỏi danh sách sử dụng.
                       </p>
                     </div>
                     <div className="flex w-full flex-col gap-3 md:flex-row xl:w-auto">
@@ -1668,7 +1668,7 @@ const AdminDashboardPage = () => {
               disabled={busyUserId === deleteTarget?.id}
             >
               <Trash2 className="size-4" />
-              Xác nhận xóa mềm
+              Xác nhận xóa tài khoản
             </Button>
           </DialogFooter>
         </DialogContent>
