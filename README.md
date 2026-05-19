@@ -1,6 +1,6 @@
 # 🛡️ ZALEGRAM - Secure Realtime Chat & Governance Web Application
 
-**Zalegram** là một ứng dụng web nhắn tin thời gian thực cao cấp, kết hợp giao diện hiện đại và hệ thống bảo mật chuyên sâu. Dự án được phát triển dựa trên mô hình pair-programming nghiêm ngặt với các tiêu chuẩn an toàn thông tin hàng đầu như mã hóa mật khẩu Argon2id, cơ chế xác thực Dual-Token (Access/Refresh Token) qua HTTP-Only Cookie, phân quyền truy cập theo vai trò (RBAC) động và lưu vết nhật ký an ninh hệ thống (Audit Logging) toàn diện.
+**Zalegram** là một ứng dụng web nhắn tin thời gian thực cao cấp, kết hợp giao diện hiện đại và hệ thống bảo mật chuyên sâu. Dự án được phát triển dựa trên mô hình pair-programming nghiêm ngặt với các tiêu chuẩn an toàn thông tin hàng đầu như mã hóa mật khẩu Argon2id, cơ chế xác thực lai giữa JWT cho REST API và express-session cho quản lý phiên server-side, refresh token lưu trong HTTP-Only Cookie, phân quyền truy cập theo vai trò (RBAC) động và lưu vết nhật ký an ninh hệ thống (Audit Logging) toàn diện.
 
 Đây là tài liệu hướng dẫn kỹ thuật phục vụ bàn giao Phase 1 và sẵn sàng triển khai tiếp tục cho Phase 2.
 
@@ -13,7 +13,7 @@
 * **State Management:** Zustand (Đồng bộ mượt mà trạng thái đăng nhập, danh sách tin nhắn, và realtime socket).
 * **Realtime:** Socket.io-client (Quản lý kết nối, sự kiện nhắn tin, trạng thái online/offline, và chỉ báo đang nhập - typing indicators).
 * **Styling (CSS):** Tailwind CSS + Radix UI (Shadcn components) mang lại giao diện Glassmorphism cao cấp, hỗ trợ Light/Dark Mode thông minh.
-* **HTTP Client:** Axios (Tích hợp interceptor tự động bắt mã lỗi 401 để refresh token ngầm không làm gián đoạn trải nghiệm người dùng).
+* **HTTP Client:** Axios (Tự động gắn Bearer access token cho REST API và gọi `/auth/refresh` bằng cookie khi gặp mã lỗi `401`).
 
 ### 2. Backend (Server-side)
 * **Runtime:** Node.js + Express.js.
@@ -24,11 +24,13 @@
 
 ## 🔒 Tính Năng Bảo Mật & Quản Trị Hệ Thống (Phase 1)
 
-### 1. Luồng Xác Thực Dual-Token An Toàn
+### 1. Luồng Xác Thực Lai Cho REST API và Socket.IO
 * Mật khẩu người dùng được mã hóa một chiều bằng thuật toán mạnh mẽ **Argon2id** (Chống tấn công vét cạn và tấn công bảng cầu vồng).
-* Sau khi đăng nhập thành công:
-  * **Access Token (JWT):** Có thời hạn ngắn (3 phút) được lưu trực tiếp trong bộ nhớ RAM của Client (Không lưu LocalStorage/SessionStorage tránh tấn công XSS).
-  * **Refresh Token:** Có thời hạn dài (7 ngày) được lưu trữ an toàn trong **HTTP-Only, Secure, SameSite Cookie** của trình duyệt, ngăn chặn hoàn toàn việc đọc token bằng mã script độc hại.
+* Với **REST API**, backend phát hành:
+  * **Access Token (JWT):** Thời hạn ngắn (`3 phút`), được frontend lưu trong `localStorage` để khôi phục phiên sau khi tải lại trang và gắn vào header `Authorization: Bearer ...`.
+  * **Refresh Token:** Thời hạn dài (`7 ngày`), được lưu trong cookie `refreshToken` với các thuộc tính **HttpOnly**, **Secure** (ở production) và **SameSite=Strict**, dùng cho endpoint `/auth/refresh`.
+* Với **quản lý phiên server-side**, backend đồng thời dùng **express-session** kết hợp **PrismaSessionStore** để lưu phiên trong SQL Server. Cookie `connect.sid` có **HttpOnly**, **SameSite=Strict** và thời hạn `24 giờ`.
+* Với **Socket.IO**, xác thực kết nối dựa trên `connect.sid` và bản ghi session trong cơ sở dữ liệu, thay vì dùng `Authorization: Bearer ...` như REST API.
 
 ### 2. Phân Quyền Vai Trò Động (Role-Based Access Control - RBAC)
 * Hệ thống được trang bị các Role mặc định: `OWNER`, `ADMIN`, `USER`.
@@ -64,7 +66,7 @@ webapp-chat-security/
 │   │   └── seed.ts           # Tệp khởi tạo tài khoản mặc định (Admin, user_demo)
 │   ├── src/
 │   │   ├── controllers/      # Hàm xử lý nghiệp vụ API (Auth, Admin, Room, Friend, Message)
-│   │   ├── middlewares/      # Bộ lọc bảo mật (Xác thực JWT, Kiểm tra quyền RBAC)
+│   │   ├── middlewares/      # Bộ lọc bảo mật (JWT cho REST API, đồng bộ session, kiểm tra RBAC)
 │   │   ├── routes/           # Định tuyến API
 │   │   ├── services/         # Tương tác trực tiếp DB thông qua Prisma
 │   │   ├── sockets/          # Xử lý sự kiện tin nhắn thời gian thực
@@ -90,15 +92,20 @@ webapp-chat-security/
 
 ### 📋 Yêu cầu hệ thống trước khi cài đặt:
 1. Đã cài đặt **Node.js** (Phiên bản v18 trở lên).
-2. Đã khởi chạy **Microsoft SQL Server** local. 
+2. Đã khởi chạy **Microsoft SQL Server** local.
 3. *Mẹo:* Đối với SQL Server Express, chạy tệp lệnh PowerShell `Enable-SQL-TCP.ps1` ở thư mục gốc để tự động cấu hình truy cập mạng TCP/IP trên cổng mặc định `1433`.
 
 ### Bước 1: Thiết lập cấu hình môi trường (.env)
-Tạo file `.env` tại thư mục `backend/` với chuỗi kết nối SQL Server của bạn:
+Tạo file `.env` tại thư mục `backend/` với chuỗi kết nối SQL Server và các secret phục vụ JWT/session:
 ```env
-DATABASE_URL="sqlserver://localhost:1433;database=ZalegramDB;user=sa;password=YourPassword123;encrypt=true;trustServerCertificate=true;"
-JWT_SECRET="zalegram_super_secure_jwt_secret_key_2026"
 PORT=4000
+NODE_ENV=development
+DATABASE_URL="sqlserver://localhost:1433;database=ZalegramDB;user=sa;password=YourPassword123;encrypt=true;trustServerCertificate=true;"
+ENCRYPTION_KEY="<64-hex-characters>"
+SESSION_SECRET="<random-32+-character-secret>"
+JWT_SECRET="<random-32+-character-secret>"
+JWT_REFRESH_SECRET="<random-32+-character-secret-different-from-jwt-secret>"
+ALLOWED_ORIGINS="http://localhost:5173,http://127.0.0.1:5173,http://localhost:5500,http://127.0.0.1:5500"
 ```
 
 ### Bước 2: Cài đặt và di trú cơ sở dữ liệu (Database Migration)
@@ -137,7 +144,7 @@ npm install
 # 2. Khởi chạy máy chủ phát triển
 npm run dev
 ```
-Giao diện Zalegram sẽ hiển thị tại địa chỉ `http://localhost:5173` hoặc cổng được cấp phát (ví dụ: `http://localhost:4173`). Đăng nhập bằng tài khoản `Admin` phía trên để vào thẳng trang Quản trị tối cao!
+Giao diện Zalegram sẽ hiển thị tại địa chỉ `http://localhost:5173` hoặc cổng được cấp phát (ví dụ: `http://localhost:4173`). Đăng nhập bằng tài khoản `Admin` phía trên để vào thẳng trang Quản trị tối cao.
 
 ---
 
