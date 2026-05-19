@@ -1,53 +1,55 @@
 # ZALEGRAM
 
-ZALEGRAM is a secure realtime chat web application built with React, Express, Prisma, SQL Server, and Socket.IO.
+ZALEGRAM là hệ thống nhắn tin thời gian thực có tích hợp quản trị người dùng, phân quyền theo vai trò và ghi nhận nhật ký an ninh. Dự án sử dụng React cho frontend, Express cho backend, Prisma ORM, SQL Server và Socket.IO.
 
-Main features:
+## Tổng quan
 
-- realtime 1-1 chat and group chat
-- admin dashboard with RBAC
-- audit logging
-- hybrid authentication:
-  - JWT access token for REST API
-  - refresh token in HttpOnly cookie
-  - server-side session for session tracking and Socket.IO
+Các thành phần chính của hệ thống:
 
-## Project structure
+- Nhắn tin 1-1 và nhóm theo thời gian thực
+- Trang quản trị với RBAC
+- Audit log cho các thao tác quan trọng
+- Cơ chế xác thực lai:
+  - REST API dùng JWT access token
+  - refresh token lưu trong cookie `HttpOnly`
+  - server-side session được dùng để quản lý phiên và xác thực Socket.IO
+
+## Cấu trúc thư mục
 
 ```text
 webapp-chat-security/
-|-- backend/
-|-- frontend/
-|-- database/
-|-- .env.example
-|-- prepare-demo.bat
-|-- start-demo.bat
-|-- stop-demo.bat
+|-- backend/              # Express, Prisma, Socket.IO
+|-- frontend/             # React, Vite
+|-- database/             # SQL scripts hỗ trợ
+|-- .env.example          # Mẫu cấu hình cho backend/.env
+|-- prepare-demo.bat      # Build nhanh cho chế độ demo
+|-- start-demo.bat        # Chạy bản demo
+|-- stop-demo.bat         # Tắt bản demo
 ```
 
-## Requirements
+## Yêu cầu môi trường
 
-Install these first:
+Trước khi chạy dự án, máy cần có:
 
-1. Node.js 18 or newer
-2. Microsoft SQL Server
-3. A SQL Server account that can access the target database
+1. Node.js 18 trở lên
+2. Microsoft SQL Server đang hoạt động
+3. Tài khoản SQL Server có quyền truy cập database đích
 
-Optional:
+Gợi ý:
 
-- `Enable-SQL-TCP.ps1` can help when SQL Server Express is not reachable over TCP.
+- Nếu dùng SQL Server Express và gặp lỗi kết nối TCP/IP, có thể tham khảo `Enable-SQL-TCP.ps1`.
 
-## Create backend/.env
+## Thiết lập file môi trường
 
-Copy the sample file:
+Tạo file `backend/.env` từ file mẫu ở thư mục gốc:
 
 ```powershell
-Copy-Item .env.example backend/.env
+Copy-Item .env.example .\backend\.env
 ```
 
-Then update `backend/.env` for your machine.
+Sau đó mở `backend/.env` và cập nhật các giá trị cho đúng với máy đang chạy.
 
-Minimum required values:
+Mẫu cấu hình tối thiểu:
 
 ```env
 PORT=4000
@@ -60,168 +62,171 @@ JWT_REFRESH_SECRET="your_long_random_refresh_secret_here"
 ALLOWED_ORIGINS="http://localhost:5173,http://127.0.0.1:5173,http://localhost:4000,http://127.0.0.1:4000"
 ```
 
-Quick secret generator:
+Lưu ý:
+
+- `ENCRYPTION_KEY` phải là chuỗi hex dài đúng 64 ký tự.
+- `SESSION_SECRET`, `JWT_SECRET`, `JWT_REFRESH_SECRET` nên là chuỗi ngẫu nhiên dài ít nhất 32 ký tự.
+- `JWT_SECRET` và `JWT_REFRESH_SECRET` không được trùng nhau.
+
+Cách tạo nhanh chuỗi ngẫu nhiên:
 
 ```powershell
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Notes:
+## Cách chạy nhanh nhất
 
-- `ENCRYPTION_KEY` must be exactly 64 hex characters.
-- `JWT_SECRET` and `JWT_REFRESH_SECRET` must be different.
-- Use long random values for every secret.
+Đây là cách nên dùng khi demo, thuyết trình hoặc bàn giao.
 
-## Fastest way to run
-
-This is the recommended path for demo, presentation, or grading.
-
-### 1. Prepare the build
+### Bước 1. Chuẩn bị bản build demo
 
 ```powershell
 .\prepare-demo.bat
 ```
 
-This script:
+Script này sẽ:
 
-- installs dependencies if needed
-- applies Prisma migrations
-- repairs older database schemas
-- builds frontend and backend
+- kiểm tra và cài dependency nếu cần
+- chạy `db:repair` để áp migration và sửa schema cũ
+- build frontend
+- build backend
 
-### 2. Start the demo server
+### Bước 2. Khởi động hệ thống
 
 ```powershell
 .\start-demo.bat
 ```
 
-Open:
+Sau khi chạy thành công, mở:
 
 - `http://127.0.0.1:4000/`
 
-### 3. Stop the demo server
+### Bước 3. Tắt hệ thống
 
 ```powershell
 .\stop-demo.bat
 ```
 
-## Development mode
+## Cách chạy ở chế độ phát triển
 
 ### Backend
 
 ```powershell
 cd backend
-npm install
-npm run db:repair
-npm run dev
+npm.cmd install
+npm.cmd run db:repair
+npm.cmd run dev
 ```
 
-Backend URL:
+Backend mặc định chạy tại:
 
 - `http://localhost:4000`
 
 ### Frontend
 
-Open another terminal:
+Mở terminal khác:
 
 ```powershell
 cd frontend
-npm install
-npm run dev
+npm.cmd install
+npm.cmd run dev
 ```
 
-Frontend URL:
+Frontend mặc định chạy tại:
 
 - `http://localhost:5173`
 
-## Default accounts
+## Tài khoản mặc định
 
-If the database has already been seeded:
+Nếu database đã được seed, có thể đăng nhập bằng:
 
 - Admin: `Admin` / `Admin@123`
 - Demo user: `user_demo` / `User@123`
 
-If those accounts do not exist:
+Nếu các tài khoản trên chưa tồn tại:
 
 ```powershell
 cd backend
-npx prisma db seed
+npm.cmd run db:seed
 ```
 
-## Useful commands
+## Các lệnh hữu ích
 
-Backend:
+### Backend
 
 ```powershell
 cd backend
-npm run dev
-npm run build
-npm run start
-npm run db:repair
-npm run db:seed
+npm.cmd run dev
+npm.cmd run build
+npm.cmd run start
+npm.cmd run db:repair
+npm.cmd run db:seed
 ```
 
-Frontend:
+### Frontend
 
 ```powershell
 cd frontend
-npm run dev
-npm run build
+npm.cmd run dev
+npm.cmd run build
 ```
 
-## Authentication note
+## Ghi chú về xác thực
 
-The current codebase is not pure session-only authentication.
+Code hiện tại không phải mô hình session-only thuần túy.
 
-Actual implementation today:
+Cơ chế đang dùng trong dự án:
 
-- REST API uses JWT access tokens
-- refresh token is stored in an HttpOnly cookie
-- `express-session` is still used for server-side session management
-- Socket.IO uses the session cookie
+- REST API xác thực bằng JWT access token
+- refresh token được lưu trong cookie `HttpOnly`
+- `express-session` vẫn được dùng cho quản lý phiên server-side
+- Socket.IO xác thực bằng session cookie
 
-If you write a report or handover document, describe the project as a hybrid authentication design unless the code is refactored later.
+Nếu cần viết báo cáo hoặc tài liệu bàn giao, nên mô tả đây là cơ chế xác thực lai, trừ khi về sau nhóm refactor lại theo hướng khác.
 
-## Common issues
+## Các lỗi thường gặp
 
-### Prisma says a column does not exist
+### 1. Lỗi thiếu cột trong Prisma hoặc SQL Server
 
-Run:
+Chạy:
 
 ```powershell
 cd backend
-npm run db:repair
+npm.cmd run db:repair
 ```
 
-### Admin page is blank
+### 2. Trang quản trị trắng xóa
 
-Rebuild the frontend and restart the demo:
+Build lại frontend rồi khởi động lại demo:
 
 ```powershell
 cd frontend
 npm.cmd run build
 ```
 
-### PowerShell blocks npm.ps1
+### 3. PowerShell chặn `npm`
 
-Use `npm.cmd` instead of `npm`:
+Nếu gặp lỗi liên quan `npm.ps1`, dùng `npm.cmd` thay cho `npm`.
+
+Ví dụ:
 
 ```powershell
 npm.cmd run build
 ```
 
-### Too many login attempts
+### 4. Bị chặn đăng nhập do quá nhiều lần thử
 
-Use `start-demo.bat`. Demo mode relaxes the login rate limit automatically.
+Trong chế độ demo, `start-demo.bat` đã bật `DEMO_MODE` để nới rate limit đăng nhập.
 
-## Quick review flow
+## Quy trình chạy ngắn gọn cho người chấm
 
-For the simplest Windows review flow:
+Nếu cần một quy trình ngắn nhất để người khác mở máy và chạy hệ thống:
 
-1. create `backend/.env`
-2. run `.\prepare-demo.bat`
-3. run `.\start-demo.bat`
-4. open `http://127.0.0.1:4000/`
-5. log in with `Admin / Admin@123`
+1. Tạo `backend/.env` từ `.env.example`
+2. Điền đúng `DATABASE_URL` và các secret
+3. Chạy `.\prepare-demo.bat`
+4. Chạy `.\start-demo.bat`
+5. Mở `http://127.0.0.1:4000/`
+6. Đăng nhập bằng `Admin / Admin@123`
 
-That is the shortest supported path to run the system.
+Đây là quy trình ngắn nhất và ổn định nhất hiện tại để chạy dự án trên Windows.
